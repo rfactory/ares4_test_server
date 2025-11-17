@@ -21,8 +21,11 @@ class Settings(BaseSettings):
     MQTT_BROKER_PORT: int = 8883
     MQTT_USERNAME: str
     MQTT_PASSWORD: str
-    MQTT_CLIENT_ID: str = "ares-server-v2"
+    MQTT_CLIENT_ID: str
     MQTT_KEEPALIVE: int = 60
+    MQTT_INITIAL_CONNECT_DELAY: int = 60
+    MQTT_RECONNECT_DELAY: int = 10
+    MQTT_MAX_RETRIES: int = 20
     MQTT_CA_CERTS: Optional[str] = None
     MQTT_CLIENT_CERT: Optional[str] = None
     MQTT_CLIENT_KEY: Optional[str] = None

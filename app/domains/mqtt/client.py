@@ -27,17 +27,16 @@ def on_disconnect(client, userdata, rc):
 
 async def connect_mqtt_background():
     global _mqtt_client
+    settings = Settings()
     
-    logger.info("Initial 60-second delay before first MQTT connection attempt...")
-    await asyncio.sleep(60)
+    logger.info(f"Initial {settings.MQTT_INITIAL_CONNECT_DELAY}-second delay before first MQTT connection attempt...")
+    await asyncio.sleep(settings.MQTT_INITIAL_CONNECT_DELAY)
 
-    max_retries = 20
     retry_count = 0
 
-    while retry_count < max_retries:
+    while retry_count < settings.MQTT_MAX_RETRIES:
         try:
             _connection_event.clear()
-            settings = Settings()
             logger.info(f"MQTT Config: Host={settings.MQTT_BROKER_HOST}, Port={settings.MQTT_BROKER_PORT}, User={settings.MQTT_USERNAME}")
             _mqtt_client = mqtt.Client(
                 client_id=settings.MQTT_CLIENT_ID,
@@ -59,7 +58,7 @@ async def connect_mqtt_background():
                 logger.warning("mTLS certificates not fully configured. Attempting non-TLS connection.")
 
             logger.info(f"Attempting to connect to MQTT broker at {settings.MQTT_BROKER_HOST}:{settings.MQTT_BROKER_PORT}...")
-            _mqtt_client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT, 60)
+            _mqtt_client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT, settings.MQTT_KEEPALIVE)
             _mqtt_client.loop_start()
 
             await asyncio.wait_for(_connection_event.wait(), timeout=60.0)
@@ -77,8 +76,8 @@ async def connect_mqtt_background():
             if _mqtt_client:
                 _mqtt_client.loop_stop()
 
-        logger.info(f"Retrying MQTT connection in 10 seconds... (Attempt {retry_count}/{max_retries})")
-        await asyncio.sleep(10)
+        logger.info(f"Retrying MQTT connection in {settings.MQTT_RECONNECT_DELAY} seconds... (Attempt {retry_count}/{settings.MQTT_MAX_RETRIES})")
+        await asyncio.sleep(settings.MQTT_RECONNECT_DELAY)
 
     if not _connection_event.is_set():
         logger.error("Max retries exceeded. Continuing without MQTT.")
