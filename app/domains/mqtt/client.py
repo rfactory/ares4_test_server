@@ -1,81 +1,91 @@
 import asyncio
-import os
-import ssl
-import tempfile
+import logging
 from paho.mqtt import client as mqtt
-from app.core.config import settings
+from app.core.config import Settings
 
-# Global list to keep track of temporary certificate files
-_temp_cert_files = []
+logger = logging.getLogger(__name__)
+
+_mqtt_client = None
+_connection_event = asyncio.Event()
+is_mqtt_connected = False
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        logger.info("MQTT client connected successfully.")
+        global is_mqtt_connected
+        is_mqtt_connected = True
+        _connection_event.set()
+    else:
+        logger.error(f"MQTT connection failed with code: {rc}")
+        _connection_event.clear()
+
+def on_disconnect(client, userdata, rc):
+    logger.warning(f"MQTT client disconnected with code: {rc}. Reconnection will be attempted.")
+    global is_mqtt_connected
+    is_mqtt_connected = False
+    _connection_event.clear()
 
 async def connect_mqtt_background():
-    broker = settings.MQTT_BROKER_HOST
-    port = settings.MQTT_BROKER_PORT
-    username = settings.MQTT_USERNAME
-    password = settings.MQTT_PASSWORD
-    client_id = settings.MQTT_CLIENT_ID
+    global _mqtt_client
+    
+    logger.info("Initial 60-second delay before first MQTT connection attempt...")
+    await asyncio.sleep(60)
 
-    mqtt_client = mqtt.Client(client_id=client_id)
-    mqtt_client.username_pw_set(username, password)
+    max_retries = 20
+    retry_count = 0
 
-    # --- Configure TLS using certificate contents from settings ---
-    if settings.MQTT_CA_CERT_CONTENT and settings.MQTT_CLIENT_CERT_CONTENT and settings.MQTT_CLIENT_KEY_CONTENT:
+    while retry_count < max_retries:
         try:
-            # Write certificate contents to temporary files
-            ca_cert_file = tempfile.NamedTemporaryFile(delete=False, mode='w')
-            ca_cert_file.write(settings.MQTT_CA_CERT_CONTENT)
-            ca_cert_file.close()
-            _temp_cert_files.append(ca_cert_file.name)
-
-            client_cert_file = tempfile.NamedTemporaryFile(delete=False, mode='w')
-            client_cert_file.write(settings.MQTT_CLIENT_CERT_CONTENT)
-            client_cert_file.close()
-            _temp_cert_files.append(client_cert_file.name)
-
-            client_key_file = tempfile.NamedTemporaryFile(delete=False, mode='w')
-            client_key_file.write(settings.MQTT_CLIENT_KEY_CONTENT)
-            client_key_file.close()
-            _temp_cert_files.append(client_key_file.name)
-
-            mqtt_client.tls_set(
-                ca_certs=ca_cert_file.name, 
-                certfile=client_cert_file.name, 
-                keyfile=client_key_file.name,
-                tls_version=ssl.PROTOCOL_TLS_CLIENT
+            _connection_event.clear()
+            settings = Settings()
+            logger.info(f"MQTT Config: Host={settings.MQTT_BROKER_HOST}, Port={settings.MQTT_BROKER_PORT}, User={settings.MQTT_USERNAME}")
+            _mqtt_client = mqtt.Client(
+                client_id=settings.MQTT_CLIENT_ID,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION1
             )
-            print("MQTT TLS configured successfully using Vault secrets and temporary files.")
+            _mqtt_client.on_connect = on_connect
+            _mqtt_client.on_disconnect = on_disconnect
+            _mqtt_client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
 
+            # mTLS 설정 추가
+            if settings.MQTT_CA_CERTS and settings.MQTT_CLIENT_CERT and settings.MQTT_CLIENT_KEY:
+                logger.info("Configuring MQTT client for mTLS.")
+                _mqtt_client.tls_set(
+                    ca_certs=settings.MQTT_CA_CERTS,
+                    certfile=settings.MQTT_CLIENT_CERT,
+                    keyfile=settings.MQTT_CLIENT_KEY
+                )
+            else:
+                logger.warning("mTLS certificates not fully configured. Attempting non-TLS connection.")
+
+            logger.info(f"Attempting to connect to MQTT broker at {settings.MQTT_BROKER_HOST}:{settings.MQTT_BROKER_PORT}...")
+            _mqtt_client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT, 60)
+            _mqtt_client.loop_start()
+
+            await asyncio.wait_for(_connection_event.wait(), timeout=60.0)
+            
+            while _connection_event.is_set():
+                await asyncio.sleep(1)
+
+        except asyncio.TimeoutError:
+            logger.error("Timeout waiting for MQTT connection.")
+            retry_count += 1
         except Exception as e:
-            print(f"Error configuring MQTT TLS: {e}. Proceeding without TLS.")
-            # Clean up any files created if TLS setup fails
-            disconnect_mqtt() # This will clean up temp files
+            logger.error(f"Error in MQTT connection loop: {str(e)}")
+            retry_count += 1
+        finally:
+            if _mqtt_client:
+                _mqtt_client.loop_stop()
 
-    else:
-        print("MQTT TLS not configured: Certificate contents not found in settings.")
+        logger.info(f"Retrying MQTT connection in 10 seconds... (Attempt {retry_count}/{max_retries})")
+        await asyncio.sleep(10)
 
-    connected = False
-    while not connected:
-        try:
-            mqtt_client.connect(broker, port, 60)
-            connected = True
-            print("MQTT connected successfully.")
-        except Exception as e:
-            print(f"Error: {e}. Retrying in 10 seconds...")
-            await asyncio.sleep(10)
-
-    mqtt_client.loop_start()
-    return mqtt_client
+    if not _connection_event.is_set():
+        logger.error("Max retries exceeded. Continuing without MQTT.")
 
 def disconnect_mqtt():
-    """
-    Disconnects the global MQTT client and cleans up temporary certificate files.
-    """
-    print("Disconnecting MQTT client and cleaning up temporary files...")
-    for path in _temp_cert_files:
-        if os.path.exists(path):
-            try:
-                os.remove(path)
-            except OSError as e:
-                print(f"Error removing temp file {path}: {e}")
-    _temp_cert_files.clear()
-    # Add actual MQTT client disconnect logic here if needed
+    global _mqtt_client
+    logger.info("Disconnecting MQTT client.")
+    if _mqtt_client:
+        _mqtt_client.disconnect()
+        _mqtt_client.loop_stop()

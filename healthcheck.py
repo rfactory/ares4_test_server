@@ -6,8 +6,13 @@ try:
     conn.request("GET", "/health")
     response = conn.getresponse()
     if response.status == 200:
-        print("Health check passed.")
-        sys.exit(0)
+        from app.domains.mqtt.client import is_mqtt_connected  # 여기서 임포트
+        if is_mqtt_connected:
+            print("Health check passed.")
+            sys.exit(0)
+        else:
+            print("Health check failed: MQTT not connected")
+            sys.exit(1)
     else:
         print(f"Health check failed with status: {response.status}")
         sys.exit(1)

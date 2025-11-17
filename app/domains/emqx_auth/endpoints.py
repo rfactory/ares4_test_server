@@ -1,41 +1,41 @@
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
-import json
+import logging
+from app.core.config import Settings, get_settings
 
-router = APIRouter()
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/mqtt")
 
 @router.post("/auth")
-async def mqtt_auth(request: Request):
-    raw_body = await request.body()
-    print(f"[EMQX Auth] Raw request body (bytes): {raw_body}")
+async def mqtt_auth(request: Request, settings: Settings = Depends(get_settings)):
     try:
-        body = json.loads(raw_body)
-        print(f"[EMQX Auth] Parsed JSON body: {body}")
-    except json.JSONDecodeError:
-        print("[EMQX Auth] Failed to decode JSON from request body.")
-        # Still allow for now, but log the failure
-        return JSONResponse(content={"result": "allow"})
-
-    # For now, allow all connections
-    return JSONResponse(content={"result": "allow"})
+        body = await request.json()
+        received_username = body.get("username", "None")
+        received_password = body.get("password", "None")
+        
+        logger.info(f"[EMQX Auth] 수신값: username={received_username}")
+        
+        if received_username == settings.MQTT_USERNAME and received_password == settings.MQTT_PASSWORD:
+            logger.info("[EMQX Auth] 인증 성공")
+            return JSONResponse(content={"result": "allow"})
+        else:
+            logger.warning(f"[EMQX Auth] 인증 실패 - username: {received_username}")
+            return JSONResponse(content={"result": "deny"})
+    except Exception as e:
+        logger.error(f"[EMQX Auth] 오류: {str(e)} - Raw body: {await request.body()}")
+        return JSONResponse(content={"result": "deny"})
 
 @router.post("/acl")
 async def mqtt_acl(request: Request):
-    raw_body = await request.body()
-    print(f"[EMQX ACL] Raw request body (bytes): {raw_body}")
     try:
-        body = json.loads(raw_body)
-        print(f"[EMQX ACL] Parsed JSON body: {body}")
-    except json.JSONDecodeError:
-        print("[EMQX ACL] Failed to decode JSON from request body.")
-        # Still allow for now, but log the failure
+        body = await request.json()
+        logger.info(f"[EMQX ACL] 수신값: {body}")
         return JSONResponse(content={"result": "allow"})
-
-    # For now, allow all publish/subscribe requests
-    return JSONResponse(content={"result": "allow"})
+    except Exception as e:
+        logger.error(f"[EMQX ACL] 오류: {str(e)} - Raw body: {await request.body()}")
+        return JSONResponse(content={"result": "deny"})
 
 @router.post("/superuser")
 async def mqtt_superuser(request: Request):
-    # TODO: Implement actual superuser logic
-    # For now, deny all
-    return {"result": 'deny'}
+    return JSONResponse(content={"result": "deny"})
