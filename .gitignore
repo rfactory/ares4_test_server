@@ -46,3 +46,6 @@ venv.bak
 .idea/
 *.swp
 *.swo
+
+# Temporary Certificates
+temp_certs/
