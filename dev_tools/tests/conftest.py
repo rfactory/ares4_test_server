@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from app.database import Base
 from app.main import app
 from app.dependencies import get_db
-from app.domains.users.crud import user_crud
-from app.domains.users.schemas import UserCreate
+from app.domains.accounts.crud import user_crud
+from app.domains.accounts.schemas import UserCreate
 from app.core.security import create_access_token
 from app.models.objects.user import User as DBUser
 from app.models.objects.hardware_blueprint import HardwareBlueprint

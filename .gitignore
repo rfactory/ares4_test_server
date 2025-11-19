@@ -49,3 +49,6 @@ venv.bak
 
 # Temporary Certificates
 temp_certs/
+
+# Log files
+device_health_checker.log

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.domains.users import endpoints as users_endpoints # users 라우터 임포트
+from app.domains.accounts import endpoints as users_endpoints # users 라우터 임포트
 from app.domains.devices import endpoints as devices_endpoints
 from app.domains.data import endpoints as data_endpoints # data 라우터 임포트
 from app.domains.emqx_auth import endpoints as emqx_auth_endpoints # EMQX Auth 라우터 임포트

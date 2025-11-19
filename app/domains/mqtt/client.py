@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import ssl
+import os
 from paho.mqtt import client as mqtt
 from app.core.config import Settings
 
@@ -49,11 +51,21 @@ async def connect_mqtt_background():
             # mTLS 설정 추가
             if settings.MQTT_CA_CERTS and settings.MQTT_CLIENT_CERT and settings.MQTT_CLIENT_KEY:
                 logger.info("Configuring MQTT client for mTLS.")
+                
+                # 파일 존재 여부 확인
+                cert_paths = [settings.MQTT_CA_CERTS, settings.MQTT_CLIENT_CERT, settings.MQTT_CLIENT_KEY]
+                for path in cert_paths:
+                    if not os.path.exists(path):
+                        raise FileNotFoundError(f"Required MQTT certificate file not found: {path}")
+
                 _mqtt_client.tls_set(
                     ca_certs=settings.MQTT_CA_CERTS,
                     certfile=settings.MQTT_CLIENT_CERT,
-                    keyfile=settings.MQTT_CLIENT_KEY
+                    keyfile=settings.MQTT_CLIENT_KEY,
+                    cert_reqs=ssl.CERT_REQUIRED,
+                    tls_version=ssl.PROTOCOL_TLSv1_2
                 )
+                _mqtt_client.tls_insecure_set(False)
             else:
                 logger.warning("mTLS certificates not fully configured. Attempting non-TLS connection.")
 

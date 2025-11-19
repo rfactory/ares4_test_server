@@ -32,3 +32,4 @@ pytest-mock
 
 # MQTT
 paho-mqtt
+redis

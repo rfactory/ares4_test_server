@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 
-from app.domains.users.crud import user_crud
-from app.domains.users.schemas import UserCreate
+from app.domains.accounts.crud import user_crud
+from app.domains.accounts.schemas import UserCreate
 from app.core.security import get_password_hash
 
 @pytest.mark.anyio
@@ -68,7 +68,7 @@ async def test_login_for_access_token_2fa_required(client: AsyncClient, db_sessi
     ))
 
     # Mock send_email function
-    mock_send_email = mocker.patch("app.domains.users.endpoints_auth.send_email", new_callable=AsyncMock)
+    mock_send_email = mocker.patch("app.domains.accounts.endpoints_auth.send_email", new_callable=AsyncMock)
 
     response = await client.post(
         "/api/v1/users/token",

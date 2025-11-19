@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 
 from app.dependencies import get_db
-from app.domains.users.schemas import Token
-from app.domains.users.crud import user_crud
+from app.domains.accounts.schemas import Token
+from app.domains.accounts.crud import user_crud
 from app.core.security import verify_password, create_access_token
 from app.core.utils import generate_random_code, send_email
 from app.models.objects.user import User as DBUser

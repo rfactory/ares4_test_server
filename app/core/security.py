@@ -1,15 +1,16 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import hmac
+import hashlib
+import base64
+import json
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 
-from app.dependencies import get_db
-from app.domains.users.schemas import TokenData
-from app.models.objects.user import User as DBUser
 from app.core.config import settings
+from app.domains.accounts.schemas import TokenData # Ensure TokenData is imported for verify_access_token
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/token")
@@ -30,7 +31,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def verify_access_token(token: str) -> TokenData:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -44,10 +45,39 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    
-    # Circular import fix: import user_crud inside the function
-    from app.domains.users.crud import user_crud
-    user = user_crud.get_user_by_username(db, username=token_data.username)
-    if user is None:
-        raise credentials_exception
-    return user
+    return token_data
+
+# --- HMAC Signature (Ported from server project) ---
+
+def generate_hmac(payload_data: dict, shared_secret: str) -> str | None:
+    """
+    Generates an HMAC-SHA256 signature for a given payload dictionary.
+    The canonical string format is: 'timestamp|sorted_json_payload'
+    """
+    if 'timestamp' not in payload_data or not shared_secret:
+        return None
+
+    # In server2, the payload might not be nested under 'value'. Adjust if necessary.
+    canonical_string = f"{payload_data['timestamp']}|{json.dumps(payload_data, sort_keys=True)}"
+    signature = hmac.new(shared_secret.encode('utf-8'), canonical_string.encode('utf-8'), hashlib.sha256).digest()
+    return base64.b64encode(signature).decode('utf-8')
+
+def verify_hmac(payload_data: dict, shared_secret: str, received_hmac: str) -> bool:
+    """
+    Verifies the received HMAC signature by regenerating it on the server side.
+    Returns True if the signatures match, False otherwise.
+    """
+    if not received_hmac or not shared_secret:
+        return False
+
+    # The received payload will contain the hmac, which should not be part of the signature calculation.
+    payload_copy = payload_data.copy()
+    if 'hmac' in payload_copy:
+        del payload_copy['hmac']
+
+    expected_hmac = generate_hmac(payload_copy, shared_secret)
+    if expected_hmac is None:
+        return False
+
+    return hmac.compare_digest(expected_hmac, received_hmac)
+

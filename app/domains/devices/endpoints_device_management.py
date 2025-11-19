@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.domains.devices.schemas import Device, DeviceCreate, DeviceUpdate
 from app.domains.devices.crud import device_crud
-from app.core.security import get_current_user
+from app.dependencies import get_current_user
 from app.models.objects.user import User as DBUser # 현재 사용자 정보 가져오기 위함
+from app.core.exceptions import PermissionDeniedError, NotFoundError
 
 router = APIRouter()
 

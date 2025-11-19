@@ -2,7 +2,15 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, UUID, Index
 from sqlalchemy.orm import relationship
 from app.database import Base
-from ..base_model import TimestampMixin, OrganizationFKMixin, HardwareBlueprintFKMixin, NullableCertificateFKMixin
+from ..base_model import TimestampMixin, OrganizationFKMixin, HardwareBlueprintFKMixin
+
+import enum
+
+class DeviceStatusEnum(enum.Enum):
+    UNKNOWN = "UNKNOWN"
+    ONLINE = "ONLINE"
+    OFFLINE = "OFFLINE"
+    TIMEOUT = "TIMEOUT"
 
 class Device(Base, TimestampMixin, OrganizationFKMixin, HardwareBlueprintFKMixin):
     """
@@ -26,6 +34,7 @@ class Device(Base, TimestampMixin, OrganizationFKMixin, HardwareBlueprintFKMixin
 
     # --- 추가 속성 ---
     visibility_status = Column(Enum('PRIVATE', 'ORGANIZATION', 'PUBLIC', name='device_visibility'), default='PRIVATE', nullable=False) # 장치의 공개 범위 상태 ('PRIVATE', 'ORGANIZATION', 'PUBLIC')
+    status = Column(Enum(DeviceStatusEnum, name='device_status'), default=DeviceStatusEnum.UNKNOWN, nullable=False) # 장치의 현재 온라인/오프라인/타임아웃 상태
     
     # --- 기록 (기존) ---
     last_seen_at = Column(DateTime(timezone=True), nullable=True) # 장치가 마지막으로 시스템에 연결된 시간

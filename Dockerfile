@@ -16,7 +16,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the healthcheck script
-COPY healthcheck.py .
+COPY scripts/healthcheck.py scripts/
+
+# Copy certificates
+COPY temp_certs /app/temp_certs/
 
 # Copy the rest of the application code
 COPY . .
