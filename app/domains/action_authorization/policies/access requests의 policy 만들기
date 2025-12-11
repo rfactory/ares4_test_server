@@ -1,0 +1,82 @@
+이 코드는 참고용임.
+# app/domains/policies/access_request_policy.py
+
+from sqlalchemy.orm import Session
+from app.core.transaction import transactional
+from app.models.objects.user import User
+from app.domains.inter_domain.access_requests.access_requests_command_provider import access_request_command_providers
+from app.domains.services.access_requests.schemas.access_request_command import AccessRequestCreate
+
+class AccessRequestPolicy:
+    @staticmethod
+    @transactional()
+    def create_request(
+        db: Session,
+        *,
+        current_user: User | None,           # 로그인된 사용자 (없으면 None)
+        email: str,
+        password: str,
+        business_registration_number: str | None,
+        requested_role_id: int,
+        reason: str | None = None,
+    ):
+        """
+        최종 정책: 가입 + 접근 요청을 한 번에 처리
+        → Validator는 여기서 호출 (예: can_request_role, can_create_org 등)
+        """
+        # 1. Validator 조합 (나중에 추가)
+        # if not Validator.can_create_user(db, email):
+        #     raise PermissionDenied()
+        # if business_registration_number and not Validator.can_create_organization(...)
+
+        # 2. User 생성 (User 도메인 provider 호출)
+        user = user_provider.create_or_get_user(email=email, password=password)
+
+        # 3. Organization 생성/연결 (있으면)
+        org_id = None
+        if business_registration_number:
+            org = organization_provider.find_or_create_by_brn(business_registration_number)
+            org_id = org.id
+
+        # 4. 순수 AccessRequest 생성 (지금 당신이 만든 도메인 그대로 사용)
+        request_in = AccessRequestCreate(
+            requested_role_id=requested_role_id,
+            organization_id=org_id,
+            reason=reason or "신규 가입 및 권한 요청"
+        )
+
+        return access_request_command_providers.create_access_request(
+            db=db,
+            request_in=request_in,
+            user_id=user.id,
+            actor_user=user
+        )
+
+    @staticmethod
+    def approve_request(db: Session, request_id: int, admin_user: User):
+        # Validator.can_approve_request(admin_user, request_id)
+        # → 승인 로직 + 역할 부여
+        pass
+
+프론트엔드 (패널 or Flutter 앱)
+        ↓
+FastAPI 라우터 → POST /access-requests/with-signup
+        ↓
+Policy 계층 → AccessRequestPolicy.create_with_signup()
+        ├─→ 1. 로그인 여부 확인
+        │       ├─ 로그인 O → current_user.id 사용
+        │       └─ 로그인 X → email + password로 User 생성 (User 도메인)
+        ├─→ 2. business_registration_number 있으면?
+        │       → Organization 도메인 → 조직 생성 or 조회 → org_id 확보
+        ├─→ 3. AccessRequestCreate 스키마 만들기
+        │       → requested_role_id
+        │       → organization_id (있으면 넣고, 없으면 null)
+        │       → reason
+        └─→ 4. access_request_command_provider.create_access_request()
+                → access_request_command_service
+                → access_request_crud_command.create()
+                → DB에 AccessRequest 저장 (user_id + 요청 내용만)
+        ↓
+DB에 한 번에 저장 (User + Organization(있으면) + AccessRequest)
+        ↓
+관리자 승인 대기 → 승인 시 역할 부여 (UserOrganizationRole 테이블에 삽입)

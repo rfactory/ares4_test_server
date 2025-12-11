@@ -2,14 +2,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
-from typing import List
 
 from app.models.objects.device import Device as DBDevice
-from app.models.objects.product_line import ProductLine as DBProductLine
 from app.models.objects.organization import Organization as DBOrganization
-from app.models.objects.organization_type import OrganizationType as DBOrganizationType
 from app.models.objects.hardware_blueprint import HardwareBlueprint as DBHardwareBlueprint # Import HardwareBlueprint
-from app.domains.data.schemas import TelemetryDataCreate, TelemetryMetadataCreate, MetaValueType, TelemetryDataResponse
+from app.domains.data.schemas import TelemetryDataCreate, TelemetryMetadataCreate, MetaValueType
 
 @pytest.fixture
 def test_device(db_session: Session, test_hardware_blueprint: DBHardwareBlueprint, test_organization: DBOrganization) -> DBDevice:

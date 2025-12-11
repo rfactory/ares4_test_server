@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
+from typing import Optional # Added Optional
+from datetime import datetime # Added datetime
 from app.database import Base
-from ..base_model import TimestampMixin, UserFKMixin # UserFKMixin은 UpgradeRequest에서 사용되므로 임포트 유지
+from ..base_model import TimestampMixin # UserFKMixin is no longer used here but keeping for reference
 
 class User(Base, TimestampMixin):
     """
@@ -14,7 +16,6 @@ class User(Base, TimestampMixin):
     username = Column(String(50), unique=True, index=True, nullable=False) # 사용자 로그인에 사용되는 고유 사용자 이름
     email = Column(String(255), unique=True, index=True, nullable=False) # 사용자의 고유 이메일 주소
     password_hash = Column(String(255), nullable=False) # 사용자 비밀번호의 해시 값
-    shared_secret = Column(String(255), nullable=True) # 2단계 인증 등에 사용될 수 있는 공유 비밀 값
     last_login = Column(DateTime(timezone=True), nullable=False, server_default=text("now()")) # 사용자의 마지막 로그인 시간
     reset_token = Column(String(255), nullable=True) # 비밀번호 재설정 토큰
     reset_token_expires_at = Column(DateTime(timezone=True), nullable=True) # 비밀번호 재설정 토큰 만료 시간
@@ -31,8 +32,6 @@ class User(Base, TimestampMixin):
     schedules = relationship("Schedule", back_populates="user") # 사용자가 생성하거나 관리하는 스케줄 목록
     alert_rules = relationship("AlertRule", back_populates="user") # 사용자가 설정한 알림 규칙 목록
     trigger_rules = relationship("TriggerRule", back_populates="user") # 사용자가 설정한 트리거 규칙 목록
-    upgrade_requests_initiated = relationship("UpgradeRequest", foreign_keys="UpgradeRequest.user_id", back_populates="user") # 사용자가 시작한 업그레이드 요청 목록
-    upgrade_requests_reviewed = relationship("UpgradeRequest", foreign_keys="UpgradeRequest.reviewed_by_user_id", back_populates="reviewed_by_user") # 사용자가 검토한 업그레이드 요청 목록
     subscriptions = relationship("UserSubscription", back_populates="user") # 사용자의 구독 정보 목록
     firmware_updates_initiated = relationship("FirmwareUpdate", foreign_keys="FirmwareUpdate.initiated_by_user_id", back_populates="initiated_by_user") # 사용자가 시작한 펌웨어 업데이트 기록 목록
     consumables = relationship("UserConsumable", back_populates="user") # 사용자가 구매하거나 소유한 소모품 목록
@@ -40,8 +39,11 @@ class User(Base, TimestampMixin):
     consumable_usage_logs = relationship("ConsumableUsageLog", back_populates="user") # 사용자와 관련된 소모품 사용 기록 목록
     alert_events_generated = relationship("AlertEvent", foreign_keys="AlertEvent.user_id", back_populates="user") # 사용자에 의해 생성된 알림 이벤트 목록
     alert_events_acknowledged = relationship("AlertEvent", foreign_keys="AlertEvent.acknowledged_by_user_id", back_populates="acknowledged_by_user") # 사용자가 확인한 알림 이벤트 목록
-    registration_requests_approved = relationship("RegistrationRequest", foreign_keys="RegistrationRequest.approved_by_user_id", back_populates="approved_by_user") # 사용자가 승인한 등록 요청 목록
     internal_asset_inventory_updates = relationship("InternalAssetInventory", foreign_keys="InternalAssetInventory.last_updated_by_user_id", back_populates="last_updated_by_user") # 사용자가 마지막으로 업데이트한 내부 자산 재고 항목 목록
     internal_asset_purchase_records = relationship("InternalAssetPurchaseRecord", foreign_keys="InternalAssetPurchaseRecord.recorded_by_user_id", back_populates="recorded_by_user") # 사용자가 기록한 내부 자산 구매 기록 목록
     internal_component_replacement_events = relationship("InternalComponentReplacementEvent", foreign_keys="InternalComponentReplacementEvent.recorded_by_user_id", back_populates="recorded_by_user") # 사용자가 기록한 내부 컴포넌트 교체 이벤트 목록
     audit_logs = relationship("AuditLog", back_populates="user") # 사용자가 생성한 감사 로그 목록
+
+    # New unified access requests relationships
+    access_requests_as_requester = relationship("AccessRequest", foreign_keys="AccessRequest.user_id", back_populates="user") # 이 사용자가 요청한 접근 요청 목록
+    access_requests_as_reviewer = relationship("AccessRequest", foreign_keys="AccessRequest.reviewed_by_user_id", back_populates="reviewed_by_user") # 이 사용자가 검토한 접근 요청 목록

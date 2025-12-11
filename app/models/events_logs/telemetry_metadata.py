@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, UniqueConstraint, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
+from typing import Optional # Added Optional
+
 from app.database import Base
 from ..base_model import TimestampMixin
 
@@ -13,12 +15,12 @@ class TelemetryMetadata(Base, TimestampMixin):
         UniqueConstraint('telemetry_data_id', 'meta_key', name='_telemetry_meta_uc'),
     )
 
-    id = Column(Integer, primary_key=True, index=True) # 텔레메트리 메타데이터의 고유 ID
-    telemetry_data_id = Column(Integer, ForeignKey("telemetry_data.id"), nullable=False) # 관련 텔레메트리 데이터의 ID
-    meta_key = Column(String(100), nullable=False) # 메타데이터의 키 (예: 'sensor_location', 'calibration_factor')
-    meta_value = Column(Text, nullable=False) # 메타데이터의 값 (Text로 저장, 타입에 따라 캐스팅)
-    meta_value_type = Column(Enum('STRING', 'INTEGER', 'FLOAT', 'BOOLEAN', 'ENUM', 'JSON', name='metadata_value_type'), nullable=False, default='STRING') # 메타데이터 값의 예상 타입
-    description = Column(Text, nullable=True) # 메타데이터에 대한 설명
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 텔레메트리 메타데이터의 고유 ID
+    telemetry_data_id: Mapped[int] = mapped_column(Integer, ForeignKey("telemetry_data.id"), nullable=False) # 관련 텔레메트리 데이터의 ID
+    meta_key: Mapped[str] = mapped_column(String(100), nullable=False) # 메타데이터의 키 (예: 'sensor_location', 'calibration_factor')
+    meta_value: Mapped[str] = mapped_column(Text, nullable=False) # 메타데이터의 값 (Text로 저장, 타입에 따라 캐스팅)
+    meta_value_type: Mapped[str] = mapped_column(Enum('STRING', 'INTEGER', 'FLOAT', 'BOOLEAN', 'ENUM', 'JSON', name='metadata_value_type', create_type=False), nullable=False, default='STRING') # 메타데이터 값의 예상 타입
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 메타데이터에 대한 설명
 
     # --- Relationships ---
     telemetry_data = relationship("TelemetryData", back_populates="metadata_items") # 이 메타데이터가 속한 텔레메트리 데이터 정보

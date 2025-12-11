@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, text, Integer, ForeignKey, String, Enum, Text
+from sqlalchemy import Column, DateTime, text, Integer, ForeignKey, Enum, Text
 from sqlalchemy.ext.declarative import declared_attr
 
 class TimestampMixin:
@@ -195,7 +195,7 @@ class LogBaseMixin:
     """
     @declared_attr
     def event_type(cls):
-        return Column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', name='log_event_type'), 
+        return Column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 'SERVER_CERTIFICATE_ACQUIRED_NEW', name='log_event_type'), 
                       nullable=False, comment="로그 유형 (온톨로지 통합 쿼리 용)")
 
     @declared_attr

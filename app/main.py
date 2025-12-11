@@ -1,24 +1,34 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from contextlib import asynccontextmanager
-import asyncio
 from app.api.v1.api import api_router
-from app.domains.mqtt.client import connect_mqtt_background, disconnect_mqtt
-from app.domains.emqx_auth.endpoints import router as emqx_router
 
-# Configure logging
+from app.core.config import get_settings
+from app.database import SessionLocal
+from app.domains.application.mqtt.orchestrator import MqttLifecycleOrchestrator
+from typing import Optional
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_mqtt_orchestrator: Optional[MqttLifecycleOrchestrator] = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # On startup
-    logger.info("Creating MQTT connection in the background...")
-    asyncio.create_task(connect_mqtt_background())
+    logger.info("Application starting up...")
+    
+    global _mqtt_orchestrator
+    _mqtt_orchestrator = MqttLifecycleOrchestrator(
+        settings=get_settings(),
+        db_session_factory=SessionLocal
+    )
+    await _mqtt_orchestrator.startup()
+
     yield
-    # On shutdown
-    logger.info("Disconnecting from MQTT broker...")
-    disconnect_mqtt()
+
+    logger.info("Application shutting down...")
+    if _mqtt_orchestrator:
+        await _mqtt_orchestrator.shutdown()
 
 app = FastAPI(
     title="Ares4 Server v2",
@@ -26,7 +36,7 @@ app = FastAPI(
 )
 
 app.include_router(api_router, prefix="/api/v1")
-app.include_router(emqx_router)
+
 
 @app.get("/")
 async def read_root():
@@ -35,3 +45,11 @@ async def read_root():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+@app.get("/health/mqtt", status_code=status.HTTP_200_OK)
+async def mqtt_health_check():
+    global _mqtt_orchestrator
+    if _mqtt_orchestrator and _mqtt_orchestrator.is_publisher_connected():
+        return {"status": "mqtt_connected"}
+    else:
+        return {"status": "mqtt_disconnected"}, status.HTTP_503_SERVICE_UNAVAILABLE

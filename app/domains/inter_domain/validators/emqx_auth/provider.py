@@ -1,0 +1,3 @@
+from app.domains.action_authorization.validators.emqx_auth.validator import emqx_auth_validator
+
+emqx_auth_validator_provider = emqx_auth_validator

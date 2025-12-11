@@ -9,9 +9,29 @@ from .plan_applicable_blueprint import PlanApplicableBlueprint
 from .role_permission import RolePermission
 from .schedule import Schedule
 from .trigger_rule import TriggerRule
-from .upgrade_request import UpgradeRequest
+# from .upgrade_request import UpgradeRequest # Removed: Replaced by AccessRequest or no longer used
 from .user_device import UserDevice
 from .user_organization_role import UserOrganizationRole
 from .user_subscription import UserSubscription
 from .subscription_plan_feature import SubscriptionPlanFeature
 from .supported_component_metadata import SupportedComponentMetadata
+
+__all__ = [
+    "AlertRule",
+    "BlueprintPinDetail",
+    "BlueprintPinMapping",
+    "BlueprintValidPin",
+    "DeviceComponentInstance",
+    "DeviceComponentPinMapping",
+    "OrganizationSubscription",
+    "PlanApplicableBlueprint",
+    "RolePermission",
+    "Schedule",
+    "TriggerRule",
+    # "UpgradeRequest", # Removed
+    "UserDevice",
+    "UserOrganizationRole",
+    "UserSubscription",
+    "SubscriptionPlanFeature",
+    "SupportedComponentMetadata",
+]

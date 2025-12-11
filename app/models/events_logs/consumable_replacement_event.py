@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin, DeviceFKMixin, UserFKMixin, UserConsumableFKMixin # Mixin 추가

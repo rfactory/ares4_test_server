@@ -82,6 +82,7 @@
   - `tier` (Integer): 역할의 계층 (예: 0, 1, 2, 3)
   - `lineage` (String): 역할의 계통 (예: `Ops`, `Dev`, `User`)
   - `numbering` (Integer): 계층 및 계통 내에서의 순번
+  - `max_headcount` (Integer, Nullable): 역할의 최대 인원수. `NULL`이면 무제한.
 - **`permissions`**: 시스템의 모든 개별 동작에 대한 권한 정의.
   - `id` (PK): 권한 고유 ID
   - `name` (String, Unique): 권한의 고유한 이름 (예: `user:read`, `device:delete`)

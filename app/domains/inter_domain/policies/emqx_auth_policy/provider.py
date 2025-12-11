@@ -1,0 +1,3 @@
+from app.domains.action_authorization.policies.emqx_auth_policy.policy import emqx_auth_policy
+
+emqx_auth_policy_provider = emqx_auth_policy

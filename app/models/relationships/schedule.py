@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin, DeviceFKMixin, UserFKMixin

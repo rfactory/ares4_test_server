@@ -1,12 +1,20 @@
 import os
 import sys
+# Add the project's root directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, create_engine
+from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from sqlalchemy_utils import database_exists, create_database
 
 from alembic import context
+
+from app.database import Base # Moved up
+from app.core.config import settings # Moved up
+# Import all models here so that Base has them registered
+from app.models import *
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -17,12 +25,6 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Add the project's root directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from app.database import Base
-from app.models import *
-from app.core.config import settings
 
 # add your model's MetaData object here
 # for 'autogenerate' support

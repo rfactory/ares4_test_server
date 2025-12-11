@@ -794,3 +794,28 @@ v6 아키텍처는 서버가 '진실의 원천(Source of Truth)'이 되는 v5의
     -   **컬럼 레벨 보안 (Column-Level Security):** 역할에 따라 민감한 데이터(예: 개인정보)를 API 응답에서 제외하기 위해, 역할별 Pydantic 응답 스키마를 동적으로 선택하여 적용할 계획입니다.
     -   **속성 기반 행 레벨 보안 (Attribute-Based Row-Level Security):** 사용자의 속성(예: '개인 고객 지원팀')에 따라 접근 가능한 데이터 행(Row)을 동적으로 필터링하는 기능을 CRUD 계층에 구현할 계획입니다.
 
+### 6. 활성 컨텍스트와 Policy 기반의 동적 인가 모델 (Active Context and Policy-Based Dynamic Authorization Model)
+
+`server2`는 더욱 정교하고 유연한 인가(Authorization)를 위해, '활성 컨텍스트'와 'Policy'를 중심으로 하는 계층적 인가 모델을 도입합니다. 이는 사용자가 단일 계정으로 여러 역할(예: 시스템 관리자, 특정 기업의 관리자, 개인 사용자)을 가질 때, 어떤 역할의 관점에서 현재 작업을 수행할지 명시적으로 선택하고, 시스템이 그에 맞춰 동적으로 권한을 검사하도록 하는 아키텍처입니다.
+
+-   **활성 컨텍스트 (Active Context)의 개념:**
+    -   사용자는 로그인 후 UI(프론트엔드)를 통해 자신이 활동할 컨텍스트를 명시적으로 선택합니다. 이 컨텍스트는 API 요청 시 헤더 등을 통해 서버로 전달됩니다.
+    -   **종류:**
+        -   **시스템 관리자 컨텍스트 (System Administrator Context):** `organization_id=NULL`인 시스템 전역 역할을 기반으로 활동합니다. 플랫폼 전체에 대한 관리가 필요할 때 사용됩니다. (예: 감사 로그 조회)
+        -   **조직 컨텍스트 (Organization Context):** 특정 `organization_id`에 연결된 역할을 기반으로 활동합니다. 소속된 특정 기업의 리소스를 관리할 때 사용됩니다. (예: 기업용 장치 관리)
+        -   **일반 사용자 컨텍스트 (General User Context):** `organization_id=NULL`인 개인용 역할을 기반으로 활동합니다. 조직에 속하지 않은 자신의 개인 리소스를 관리할 때 사용됩니다. (예: 개인용 장치 관리)
+
+-   **Policy 중심의 계층적 인가 흐름 (Policy-Centric Layered Authorization Flow):**
+    -   모든 인가 로직의 시작점은 `Policy` 계층입니다. `Policy`는 특정 비즈니스 액션(예: '감사 로그 조회')에 대한 인가 절차 전체를 오케스트레이션합니다.
+    -   **흐름:**
+        1.  **1단계 (컨텍스트 유효성 검사):** `Policy`는 가장 먼저, API를 통해 전달받은 '활성 컨텍스트'가 해당 액션을 수행하기에 적합한 컨텍스트인지 확인합니다. 이 확인 로직은 재사용 가능한 `ContextValidator`를 통해 수행될 수 있습니다.
+        2.  **2단계 (권한 확인):** 컨텍스트가 유효할 경우, `Policy`는 해당 컨텍스트 내에서 사용자가 필요한 세부 권한(Permission)을 가지고 있는지 범용 `PermissionValidator`를 통해 확인합니다. (예: `permission_validator.validate(user, permission_name="audit:read:full", active_context)`)
+        3.  **3단계 (동적 필터 조회):** 확인된 최상위 권한에 연결된 `filter_condition`이나 `allowed_columns` 같은 동적 규칙을 데이터베이스(`role_permissions` 테이블)에서 조회합니다.
+        4.  **4단계 (서비스 호출):** `Policy`는 조회한 동적 필터 규칙을 인자로 하여, 비즈니스 로직이 없는 단순한 `Service` 계층의 메소드를 호출하여 최종 데이터를 가져옵니다.
+
+-   **계층별 책임:**
+    -   **Provider/Dependency (FastAPI `Depends`):** API 요청으로부터 '활성 컨텍스트'를 해석하고 객체로 만드는 책임을 가집니다.
+    -   **Policy:** '컨텍스트 검사 -> 권한 검사 -> 동적 필터 조회 -> 서비스 호출'의 전체 인가 흐름을 지휘하는 오케스트레이터입니다.
+    -   **Validator:** '이 컨텍스트가 관리자 컨텍스트인가?', '이 사용자에게 이 권한이 있는가?'와 같은 매우 단일화된 질문에만 답하는 재사용 가능한 부품입니다.
+    -   **Service / CRUD:** `Policy`로부터 받은 조건대로 데이터를 조회하거나 조작하는 역할만 수행하며, 컨텍스트나 권한에 대해 알지 못합니다.
+

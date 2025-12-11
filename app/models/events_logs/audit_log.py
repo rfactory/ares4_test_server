@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy import Column, Integer, Enum
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin, LogBaseMixin, NullableUserFKMixin # Added LogBaseMixin
@@ -16,7 +16,7 @@ class AuditLog(Base, TimestampMixin, LogBaseMixin, NullableUserFKMixin): # Inher
     # action은 LogBaseMixin의 description으로 대체됩니다.
     
     # LogBaseMixin의 event_type을 'AUDIT'로 설정
-    event_type = Column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', name='log_event_type'), nullable=False, default='AUDIT') # 로그 유형 (온톨로지 통합 쿼리 용)
+    event_type = Column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 'SERVER_CERTIFICATE_ACQUIRED_NEW', name='log_event_type'), nullable=False, default='AUDIT') # 로그 유형 (온톨로지 통합 쿼리 용)
     # LogBaseMixin의 log_level을 사용 (AuditLog는 log_level이 명시적으로 필요하지 않을 수 있으므로 nullable=True)
     # LogBaseMixin의 description을 사용 (기존 action 필드 대체)
 

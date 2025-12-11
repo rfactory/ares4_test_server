@@ -1,5 +1,8 @@
-from sqlalchemy import Column, Integer, DateTime, Float, String, ForeignKey, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, DateTime, Float, String, Enum
+from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
+from typing import Optional # Added Optional
+from datetime import datetime # Added datetime
+
 from app.database import Base
 from ..base_model import TimestampMixin, DeviceFKMixin, HardwareBlueprintFKMixin
 
@@ -14,15 +17,15 @@ class ProductionEvent(Base, TimestampMixin, DeviceFKMixin, HardwareBlueprintFKMi
     """
     __tablename__ = "production_events"
 
-    id = Column(Integer, primary_key=True, index=True) # 생산 이벤트 ID
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 생산 이벤트 ID
     # device_id는 DeviceFKMixin으로부터 상속받습니다.
     # hardware_blueprint_id는 HardwareBlueprintFKMixin으로부터 상속받습니다.
-    event_type = Column(Enum('HARVEST', 'GROWTH_UPDATE', 'MAINTENANCE', name='production_event_type'), nullable=False, default='GROWTH_UPDATE') # 이벤트 유형 (e.g., 'HARVEST' for 수확, 'GROWTH_UPDATE' for 성장 업데이트)
-    event_date = Column(DateTime(timezone=True), nullable=False) # 이벤트 발생 시간
-    yield_amount = Column(Float, nullable=True) # 수확량 (스마트팜용, Naava-like에서는 Null)
-    crop_type = Column(String(50), nullable=True) # 재배 작물 유형 (예: '토마토', '상추')
-    growth_stage = Column(String(50), nullable=True) # 성장 단계 (e.g., '발아', '성숙', '수확')
-    notes = Column(String(255), nullable=True) # 추가 메모
+    event_type: Mapped[str] = mapped_column(Enum('HARVEST', 'GROWTH_UPDATE', 'MAINTENANCE', name='production_event_type', create_type=False), nullable=False, default='GROWTH_UPDATE') # 이벤트 유형 (e.g., 'HARVEST' for 수확, 'GROWTH_UPDATE' for 성장 업데이트)
+    event_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False) # 이벤트 발생 시간
+    yield_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True) # 수확량 (스마트팜용, Naava-like에서는 Null)
+    crop_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # 재배 작물 유형 (예: '토마토', '상추')
+    growth_stage: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # 성장 단계 (e.g., '발아', '성숙', '수확')
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 추가 메모
     # --- Relationships ---
     device = relationship("Device", back_populates="production_events") # 이 생산 이벤트가 발생한 장치 정보
     hardware_blueprint = relationship("HardwareBlueprint", back_populates="production_events") # 이 생산 이벤트와 관련된 하드웨어 블루프린트 정보

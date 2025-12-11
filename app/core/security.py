@@ -6,11 +6,12 @@ import base64
 import json
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+import secrets # ADDED
 
 from app.core.config import settings
-from app.domains.accounts.schemas import TokenData # Ensure TokenData is imported for verify_access_token
+from app.domains.inter_domain.token.schemas.token_command import TokenData # Use the new inter-domain path
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/token")
@@ -26,9 +27,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES) # Corrected attribute name
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM) # Corrected attribute names
     return encoded_jwt
 
 def verify_access_token(token: str) -> TokenData:
@@ -38,7 +39,7 @@ def verify_access_token(token: str) -> TokenData:
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]) # Corrected attribute names
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -46,6 +47,10 @@ def verify_access_token(token: str) -> TokenData:
     except JWTError:
         raise credentials_exception
     return token_data
+
+def generate_shared_secret(length: int = 32) -> str: # ADDED
+    """Generates a secure, URL-safe random string for shared secrets."""
+    return secrets.token_urlsafe(length)
 
 # --- HMAC Signature (Ported from server project) ---
 

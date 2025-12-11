@@ -1,8 +1,11 @@
 # app/models/objects/device.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, UUID, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, UUID, Index, Boolean, text
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import Optional
+from datetime import datetime
+
 from app.database import Base
-from ..base_model import TimestampMixin, OrganizationFKMixin, HardwareBlueprintFKMixin
+from ..base_model import TimestampMixin, HardwareBlueprintFKMixin
 
 import enum
 
@@ -11,39 +14,36 @@ class DeviceStatusEnum(enum.Enum):
     ONLINE = "ONLINE"
     OFFLINE = "OFFLINE"
     TIMEOUT = "TIMEOUT"
+    RECOVERY_NEEDED = "RECOVERY_NEEDED" # 인증서 복구 필요 상태
 
-class Device(Base, TimestampMixin, OrganizationFKMixin, HardwareBlueprintFKMixin):
+class Device(Base, TimestampMixin, HardwareBlueprintFKMixin):
     """
     장치 모델은 시스템에 등록된 각 하드웨어 장치의 고유한 식별 정보와 상태를 관리합니다.
     """
     __tablename__ = "devices"
-    __table_args__ = (
-        Index('idx_device_org_blueprint', 'organization_id', 'hardware_blueprint_id'), # Added composite index
-    )
-
-    id = Column(Integer, primary_key=True, index=True) # 장치의 고유 ID
-    cpu_serial = Column(String(255), unique=True, nullable=False, index=True) # 장치의 CPU 고유 시리얼 번호
-    current_uuid = Column(UUID(as_uuid=True), unique=True, nullable=False, index=True) # 장치에 할당된 현재 UUID (Universally Unique Identifier)
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 장치의 고유 ID
+    cpu_serial: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True) # 장치의 CPU 고유 시리얼 번호
+    current_uuid: Mapped[UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False, index=True) # 장치에 할당된 현재 UUID (Universally Unique Identifier)
+    hmac_key_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True) # Vault Transit Engine에 저장된 HMAC 키의 이름
     # --- 관계 정의 (외래 키) ---
     # hardware_blueprint_id는 HardwareBlueprintFKMixin으로부터 상속받습니다.
-    # organization_id는 OrganizationFKMixin으로부터 상속받습니다.
-    
-    # --- 인증서 관리 중앙화 (제안 2) ---
-    device_certificate_id = Column(Integer, ForeignKey("certificates.id"), unique=True, nullable=True) # 장치 인증서의 ID (선택 사항)
-    ca_certificate_id = Column(Integer, ForeignKey("certificates.id"), nullable=True) # 장치에 사용된 CA(인증 기관) 인증서의 ID (선택 사항)
 
     # --- 추가 속성 ---
-    visibility_status = Column(Enum('PRIVATE', 'ORGANIZATION', 'PUBLIC', name='device_visibility'), default='PRIVATE', nullable=False) # 장치의 공개 범위 상태 ('PRIVATE', 'ORGANIZATION', 'PUBLIC')
-    status = Column(Enum(DeviceStatusEnum, name='device_status'), default=DeviceStatusEnum.UNKNOWN, nullable=False) # 장치의 현재 온라인/오프라인/타임아웃 상태
+    visibility_status: Mapped[str] = mapped_column(Enum('PRIVATE', 'ORGANIZATION', 'PUBLIC', name='device_visibility', create_type=False), default='PRIVATE', nullable=False) # 장치의 공개 범위 상태 ('PRIVATE', 'ORGANIZATION', 'PUBLIC')
+    status: Mapped[DeviceStatusEnum] = mapped_column(Enum(DeviceStatusEnum, name='device_status', create_type=False), default=DeviceStatusEnum.UNKNOWN, nullable=False) # 장치의 현재 온라인/오프라인/타임아웃 상태
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # Soft delete를 위한 활성화 상태
     
     # --- 기록 (기존) ---
-    last_seen_at = Column(DateTime(timezone=True), nullable=True) # 장치가 마지막으로 시스템에 연결된 시간
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 장치가 마지막으로 시스템에 연결된 시간
+
+    # --- 인증서 복구용 ---
+    recovery_token: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True) # 인증서 복구를 위한 일회용 토큰
+    recovery_token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 복구 토큰 만료 시간
     
     # --- Relationships ---
     hardware_blueprint = relationship("HardwareBlueprint", back_populates="devices") # 이 장치의 하드웨어 블루프린트 정보
-    organization = relationship("Organization", back_populates="devices") # 이 장치가 속한 조직 정보
-    device_certificate = relationship("Certificate", foreign_keys=[device_certificate_id]) # 이 장치에 할당된 고유 인증서
-    ca_certificate = relationship("Certificate", foreign_keys=[ca_certificate_id]) # 이 장치에 사용된 CA 인증서
+    organization_devices = relationship("OrganizationDevice", back_populates="device") # 이 장치가 할당된 조직 정보 (관계 테이블)
     component_instances = relationship("DeviceComponentInstance", back_populates="device") # 이 장치에 설치된 컴포넌트 인스턴스 목록
     users = relationship("UserDevice", back_populates="device") # 이 장치에 접근 권한이 있는 사용자 목록
     schedules = relationship("Schedule", back_populates="device") # 이 장치와 관련된 스케줄 목록

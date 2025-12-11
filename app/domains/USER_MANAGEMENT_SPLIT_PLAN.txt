@@ -1,0 +1,61 @@
+# `user_management` 도메인 분리 정밀 계획서
+
+## 목표: 오케스트레이터인 `user_management`의 기존 기능들을 4개의 새로운 전문가 서비스 도메인으로 완전히 이전하고 리팩토링한다.
+
+## 소스 디렉토리 (참고 대상):
+- `app/domains/application/user_management/`
+
+---
+
+### 1. `services/user_identity` 도메인 (사용자 신원 관리)
+
+- **책임:** 사용자 계정의 핵심 CRUD(생성, 조회, 수정, 삭제) 담당.
+- **이전 대상:**
+    - **Schemas:** `user.py`의 `UserBase`, `UserCreate`, `UserUpdate`, `User` 스키마 -> `services/user_identity/schemas/user.py`로 이동.
+    - **CRUD:** `account_crud.py`의 `CRUDUser` 클래스 -> `services/user_identity/crud/user_crud.py`로 이동.
+    - **Services:** `user_management_service.py`의 `get_user_by_username`, `get_user_by_email`, `get_user`, `create_user_and_log` 메소드 -> `services/user_identity/services/user_identity_service.py`로 이동.
+- **수정 사항:**
+    - `create_user_and_log` 내부의 `audit_service.log` 호출은 `inter_domain`의 `audit_provider`를 사용하도록 수정.
+
+---
+
+### 2. `services/user_settings` 도메인 (사용자 설정 관리)
+
+- **책임:** 사용자의 개별 설정 변경 담당.
+- **이전 대상:**
+    - **Services:** `user_management_service.py`의 `toggle_2fa` 메소드 -> `services/user_settings/services/user_settings_service.py`로 이동.
+- **수정 사항:**
+    - 이 서비스는 `user_identity` 도메인에 의존하므로, `inter_domain`의 `user_identity_provider`를 통해 사용자 정보를 가져오도록 수정.
+    - `audit_service.log` 호출은 `inter_domain`의 `audit_provider`를 사용하도록 수정.
+
+---
+
+### 3. `services/access_requests` 도메인 (접근 요청 관리)
+
+- **책임:** 역할(계급) 요청 및 승인/거절 워크플로우 담당.
+- **이전 대상:**
+    - **Schemas:** `access_request.py` 스키마 -> `services/access_requests/schemas/access_request.py`로 이동.
+    - **CRUD:** `access_request_crud.py` -> `services/access_requests/crud/access_request_crud.py`로 이동.
+    - **Services:** `user_management_service.py`의 `create_access_request`, `get_access_requests`, `process_access_request` 메소드 -> `services/access_requests/services/access_request_service.py`로 이동.
+- **수정 사항:**
+    - 이 서비스는 `user_identity`, `user_authorization`, `organizations` 등 여러 도메인에 의존. 모든 외부 도메인 호출은 `inter_domain` 프로바이더를 통해 이루어지도록 수정.
+
+---
+
+### 4. `services/user_authorization` 도메인 (사용자 권한 부여)
+
+- **책임:** 사용자에게 역할을 실제로 부여하거나 회수하는 권한 관리 담당.
+- **이전 대상:**
+    - **Services:** `user_management_service.py`의 `process_access_request` 메소드 안에 포함된 역할 부여 로직(`authorization_service.assign_role_to_user` 호출 부분) -> `services/user_authorization/services/user_authorization_service.py`의 `assign_role` 메소드로 추출.
+- **수정 사항:**
+    - `app/core/authorization/authorization_service.py`의 `assign_role_to_user` 로직을 이 새로운 서비스로 가져오거나, 이 서비스를 해당 코어 로직의 Facade로 만들 수 있음.
+
+---
+
+### 5. `application/user_management` 도메인 (오케스트레이터)
+
+- **책임:** 위 4개 전문가 서비스들을 조합하여 하나의 비즈니스 워크플로우를 완성.
+- **작업:**
+    1. 위의 모든 기능들이 각 전문가 서비스로 이전된 후, `user_management_service.py`에 남아있는 코드를 정리.
+    2. 파일 이름을 `user_management_coordinator.py`로 변경.
+    3. 내부 메소드들이 직접 로직을 수행하는 대신, `inter_domain` 프로바이더를 통해 각 전문가 서비스를 호출하도록 수정.

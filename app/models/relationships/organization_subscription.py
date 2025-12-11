@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin, OrganizationFKMixin, SubscriptionPlanFKMixin # Mixin 추가

@@ -1,5 +1,5 @@
 # app/models/objects/hardware_blueprint.py
-from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey
+from sqlalchemy import Column, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin, ProductLineFKMixin # ProductLineFKMixin 추가

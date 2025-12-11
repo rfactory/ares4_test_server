@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
@@ -45,6 +44,7 @@ class Settings(BaseSettings):
     VAULT_APPROLE_SECRET_ID: Optional[str] = None
     VAULT_PKI_MOUNT_POINT: str = "pki_int"
     VAULT_PKI_LISTENER_ROLE: str = "ares-server-role"
+    VAULT_SERVER_CERT_TTL: str = "720h" # 서버 MQTT 클라이언트 인증서 유효기간 (예: 30일)
 
     # --- Health Checker Settings ---
     DEVICE_HEALTH_CHECK_INTERVAL_SECONDS: int = 60
@@ -64,6 +64,6 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings() # type: ignore[call-arg]
 
 settings = get_settings()

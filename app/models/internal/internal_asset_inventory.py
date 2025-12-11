@@ -1,5 +1,5 @@
 # app/models/internal/internal_asset_inventory.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin, AssetDefinitionFKMixin # NullableUserFKMixin 제거
