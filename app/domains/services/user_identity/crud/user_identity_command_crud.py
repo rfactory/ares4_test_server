@@ -8,6 +8,10 @@ from ..schemas.user_identity_command import UserCreate, UserUpdate
 class CRUDUserCommand(CRUDBase[User, UserCreate, UserUpdate]):
     def create_with_hashed_password(self, db: Session, *, create_data: Dict[str, Any]) -> User:
         """사전에 해시된 비밀번호로 사용자를 생성합니다. 커밋은 수행하지 않습니다."""
+        # Ensure no ID is passed, so the DB sequence is always used.
+        if 'id' in create_data:
+            del create_data['id']
+            
         db_obj = User(**create_data)
         db.add(db_obj)
         db.flush() # ID 생성을 위해 flush 하지만, 커밋은 하지 않음

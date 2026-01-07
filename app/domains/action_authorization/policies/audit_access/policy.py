@@ -11,8 +11,8 @@ from app.dependencies import get_active_context, ActiveContext
 # 의존성: 범용 권한 검증기
 from ...validators.permission.validator import permission_validator
 
-# 의존성: 데이터 조회를 위한 서비스
-from app.domains.services.audit_query.services.audit_query_service import audit_query_service
+# 의존성: 데이터 조회를 위한 Provider (inter_domain을 통해 호출)
+from ....inter_domain.audit.audit_query_provider import audit_query_provider
 
 # 이 Policy가 사용할 특정 권한 이름들
 AUDIT_READ_FULL = "audit:read:full"
@@ -48,12 +48,12 @@ class AuditAccessPolicy:
         can_read_full, _ = permission_validator.validate(db, user=current_user, permission_name=AUDIT_READ_FULL)
         if can_read_full:
             # filter_condition이 없으므로 None 전달
-            return audit_query_service.get_logs_with_filter(db, skip=skip, limit=limit, filter_condition=None)
+            return audit_query_provider.get_logs_with_filter(db, skip=skip, limit=limit, filter_condition=None)
 
         can_read_general, _ = permission_validator.validate(db, user=current_user, permission_name=AUDIT_READ_GENERAL)
         if can_read_general:
             # 향후 마스킹 등을 위해 분리. 현재는 필터 없이 모든 로그 조회.
-            return audit_query_service.get_logs_with_filter(db, skip=skip, limit=limit, filter_condition=None)
+            return audit_query_provider.get_logs_with_filter(db, skip=skip, limit=limit, filter_condition=None)
 
         can_read_technical, _ = permission_validator.validate(db, user=current_user, permission_name=AUDIT_READ_TECHNICAL)
         if can_read_technical:
@@ -61,7 +61,7 @@ class AuditAccessPolicy:
             # filter_condition = get_filter_for_permission(db, permission_name=AUDIT_READ_TECHNICAL)
             # 현재는 하드코딩된 예시 필터 사용
             example_filter = {"event_type": "SYSTEM_ERROR"}
-            return audit_query_service.get_logs_with_filter(db, skip=skip, limit=limit, filter_condition=example_filter)
+            return audit_query_provider.get_logs_with_filter(db, skip=skip, limit=limit, filter_condition=example_filter)
         
         # 어떤 관련 권한도 없는 경우
         logger.warning(f"User (ID: {current_user.id}) in SYSTEM_ADMINISTRATOR context has no permission to read audit logs.")

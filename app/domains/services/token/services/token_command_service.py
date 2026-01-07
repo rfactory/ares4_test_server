@@ -17,16 +17,16 @@ class TokenCommandService:
         주어진 사용자에 대해 새로운 JWT 접근 토큰을 생성하고, 로그인 이벤트를 감사합니다.
         이 메소드는 상위 Policy 계층에서 호출되며, 동일한 DB 트랜잭션 내에서 처리됩니다.
         """
-        # 감사 로그: 사용자 로그인 이벤트 기록 (동일 트랜잭션 내에서 처리)
-        audit_command_provider.log_creation(
-            db=db, # Policy에서 넘겨받은 DB 세션 사용
+        # 감사 로그: 사용자 로그인 이벤트 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="AUDIT", # Use a valid, existing event type
+            description=f"User '{user.username}' logged in successfully.",
             actor_user=user,
-            resource_name="UserLogin",
-            resource_id=user.id,
-            new_value={"status": "success", "user_id": user.id, "username": user.username, "email": user.email}
+            target_user=user
         )
 
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token_str = create_access_token(
             data={"sub": str(user.id)}, expires_delta=access_token_expires
         )

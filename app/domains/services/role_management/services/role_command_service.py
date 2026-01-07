@@ -1,11 +1,13 @@
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.core.exceptions import DuplicateEntryError, NotFoundError
 from app.models.objects.role import Role
 from app.models.objects.user import User
 from ..crud.role_command_crud import role_command_crud
 from ..crud.role_query_crud import role_query_crud
-from ..schemas.role_command import RoleCreate, RoleUpdate
+from ..crud.role_permission_command_crud import role_permission_command_crud # 추가
+from ..schemas.role_command import RoleCreate, RoleUpdate, RolePermissionUpdateRequest, PermissionAssignment # 추가
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class RoleCommandService:
@@ -18,12 +20,9 @@ class RoleCommandService:
         new_role = role_command_crud.create(db, obj_in=role_in)
         db.flush()
 
-        audit_command_provider.log_creation(
-            db=db,
-            actor_user=actor_user,
-            resource_name="Role",
-            resource_id=new_role.id,
-            new_value=new_role.as_dict()
+        audit_command_provider.log(
+            db=db, event_type="ROLE_CREATED", actor_user=actor_user,
+            description=f"Role '{new_role.name}' created.", details={"new_value": new_role.as_dict()}
         )
         return new_role
 
@@ -42,13 +41,9 @@ class RoleCommandService:
         updated_role = role_command_crud.update(db, db_obj=db_role, obj_in=role_in)
         db.flush()
 
-        audit_command_provider.log_update(
-            db=db,
-            actor_user=actor_user,
-            resource_name="Role",
-            resource_id=updated_role.id,
-            old_value=old_value,
-            new_value=updated_role.as_dict()
+        audit_command_provider.log(
+            db=db, event_type="ROLE_UPDATED", actor_user=actor_user,
+            description=f"Role '{updated_role.name}' updated.", details={"old_value": old_value, "new_value": updated_role.as_dict()}
         )
         return updated_role
 
@@ -62,13 +57,28 @@ class RoleCommandService:
         deleted_role = role_command_crud.remove(db, id=role_id)
         db.flush()
 
-        audit_command_provider.log_deletion(
-            db=db,
-            actor_user=actor_user,
-            resource_name="Role",
-            resource_id=role_id,
-            deleted_value=deleted_value
+        audit_command_provider.log(
+            db=db, event_type="ROLE_DELETED", actor_user=actor_user,
+            description=f"Role '{deleted_value['name']}' deleted.", details={"deleted_value": deleted_value}
         )
         return deleted_role
+
+    def update_permissions_for_role(self, db: Session, *, role_id: int, permissions_in: List[PermissionAssignment], actor_user: User):
+        """역할에 할당된 권한 목록 전체를 업데이트합니다."""
+        # TODO: actor_user가 이 role_id를 수정할 권한이 있는지 확인하는 로직 (API 계층에서)
+
+        # 1. 기존 권한 할당을 모두 삭제
+        role_permission_command_crud.remove_by_role_id(db, role_id=role_id)
+
+        # 2. 새로운 권한 할당 목록을 대량으로 추가
+        if permissions_in:
+            role_permission_command_crud.bulk_create(db, role_id=role_id, permissions=permissions_in)
+        
+        # 감사 로그 (단순화를 위해, 상세 변경 내역은 생략)
+        audit_command_provider.log(
+            db=db, event_type="ROLE_PERMISSIONS_UPDATED", actor_user=actor_user,
+            description=f"Permissions for role ID {role_id} updated.",
+            details={"role_id": role_id, "new_permission_count": len(permissions_in)}
+        )
 
 role_command_service = RoleCommandService()

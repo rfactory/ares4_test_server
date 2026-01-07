@@ -5,6 +5,9 @@ from app.domains.services.user_identity.services.user_identity_query_service imp
 from .schemas.models import User # Re-export for inter-domain usage
 
 class UserIdentityQueryProvider:
+    def get_user_by_id(self, db: Session, user_id: int) -> Optional[User]:
+        return user_identity_query_service.get_user_by_id(db, user_id=user_id)
+
     def get_user_by_username(self, db: Session, username: str) -> Optional[User]:
         return user_identity_query_service.get_user_by_username(db, username=username)
 

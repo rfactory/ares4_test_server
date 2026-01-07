@@ -284,3 +284,40 @@ vault 컨테이너 시작 후, 백그라운드 작업(CRL 생성 등) 중 `open 
 ### 6.6. 최종 결과
 
 모든 문제를 해결한 후, `fastapi_app2`는 시작 시 EMQX 브로커에 안정적으로 mTLS 연결을 수립하고, 구독(`SUBACK`)까지 성공적으로 마친 후 더 이상 끊김 없이 안정적인 상태를 유지하게 되었습니다. 이로써 `server2`의 MQTT 통신 파이프라인이 완벽하게 안정화되었습니다.
+
+---
+
+## 7. API 라우팅 404 Not Found 및 인증 로직 오류
+
+### 7.1. 문제 발생 일시
+
+2025년 12월 17일
+
+### 7.2. 문제 요약
+
+React 프론트엔드에서 조직 목록을 조회하는 API(`GET /api/v1/panel/organizations`)를 호출했을 때, 백엔드 서버가 처음에는 `404 Not Found`를, 나중에는 `500 Internal Server Error`를 반환하는 문제가 발생했습니다.
+
+### 7.3. 상세 해결 과정 및 교훈
+
+| 단계 | 진단 및 가설 | 해결책 및 시도 | 결과 | 교훈 |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. 프록시 설정 오류 의심** | Vite의 프록시 설정이 잘못되어 백엔드로 요청이 올바르게 전달되지 않는다고 가정. | `vite.config.ts`의 `proxy` 설정에 `rewrite` 규칙을 추가/삭제하며 테스트. | ❌ 해결 안 됨 | `curl` 테스트를 통해 컨테이너 간 네트워크 통신은 정상임을 확인. 프록시 설정 자체보다는 다른 문제임을 시사. |
+| **2. 파이썬 모듈 임포트 오류 의심** | 백엔드 라우터 모듈이 제대로 로드되지 않아 경로가 등록되지 않았다고 가정. | 1. 라우터 파일들에 `print`문을 추가하여 로드 순서 확인. <br> 2. `__init__.py` 파일이 누락되었다고 판단하여 `endpoints`, `api`, `api/v1` 디렉토리에 추가 시도. | ❌ 해결 안 됨 | 로그 분석 결과, 모든 라우터 모듈은 정상적으로 import되고 있었음. `__init__.py`는 근본 원인이 아니었음. |
+| **3. 권한 문제 의심 (사용자 제안)** | 권한 검사 로직에서 404를 반환할 수 있다는 가설 제기. | `panel.py`의 `get_current_user` 의존성을 따라 `dependencies.py`까지 역추적. | ✅ **결정적 단서 발견** | `get_current_user` 함수가 존재하지 않는 `username`으로 사용자를 찾다가 `404`를 발생시키는 것을 확인. |
+| **4. JWT 토큰 데이터 불일치** | `get_current_user`가 왜 잘못된 `username`을 찾는지 확인하기 위해 토큰 생성 및 검증 로직을 추적. | `token_command_service.py`와 `security.py`를 분석. | ✅ **근본 원인 발견** | 토큰은 `id`를 `sub`로 저장하는데, 토큰 검증 로직이 이 `id` 값을 `username`으로 잘못 해석하여 전달하고 있었음. |
+| **5. 인증 로직 전체 수정** | `username` 기반 조회에서 `id` 기반 조회로 전환하는 과정에서 일부 함수가 누락되어 `AttributeError` 발생. | `get_user_by_id` 함수를 `UserIdentityQueryCRUD`, `UserIdentityQueryService`, `UserIdentityQueryProvider` 세 계층에 모두 구현. | ✅ **최종 해결** | 모든 인증 흐름이 불변하는 `id`를 사용하도록 수정되어, 안정성과 명확성을 확보하고 모든 오류를 해결. |
+
+### 7.4. 근본 원인
+
+최종 문제의 근본 원인은 **JWT 토큰에 담긴 정보와, 그 정보를 해석하여 사용하는 방식 간의 불일치**였습니다. 토큰에는 사용자의 `id`가 `sub` 클레임으로 저장되었지만, `security.py`의 `verify_access_token` 함수가 이 `id` 값을 `TokenData`의 `username` 필드에 잘못 할당했습니다. 이로 인해 `get_current_user` 의존성은 존재하지 않는 `username` (예: `username='1'`)으로 사용자를 찾으려 했고, `User not found` (404) 또는 `AttributeError` (500)를 유발했습니다.
+
+### 7.5. 최종 해결책
+
+1.  **`TokenData` 스키마 수정:** `services/token/schemas/token_command.py`의 `TokenData` 모델이 `username: str` 대신 `id: int`를 갖도록 수정했습니다.
+2.  **토큰 검증 로직 수정:** `core/security.py`의 `verify_access_token` 함수가 토큰의 `sub` 클레임을 `TokenData`의 `id` 필드에 올바르게 할당하도록 수정했습니다.
+3.  **사용자 조회 로직 수정:** `dependencies.py`의 `get_current_user` 함수가 `token_data.id`를 사용하여 `user_identity_query_provider.get_user_by_id`를 호출하도록 수정했습니다.
+4.  **`get_user_by_id` 구현:** `AttributeError`를 해결하기 위해, `user_identity` 도메인의 CRUD, Service, Provider 계층에 `id`로 사용자를 조회하는 메소드를 모두 추가했습니다.
+
+### 7.6. 최종 결과 및 교훈
+
+모든 수정 후, `GET /api/v1/panel/organizations` 요청이 `200 OK`를 반환하며 정상적으로 데이터를 조회하는 것을 확인했습니다. 이 과정을 통해, **오류 메시지를 끝까지 추적하는 것**과, **시스템의 핵심 식별자(primary identifier)는 불변하는 값(e.g., `id`)을 사용해야 한다**는 중요한 아키텍처 원칙을 다시 한번 확인했습니다. 비록 `username`(닉네임)도 unique 제약조건이 있지만, 사용자가 나중에 변경할 가능성이 있는 '자연 키(Natural Key)'입니다. 반면, `id`는 절대로 변하지 않는 '대리 키(Surrogate Key)'이므로, 닉네임 변경과 같은 기능 확장 시에도 인증 시스템의 안정성을 보장할 수 있습니다.

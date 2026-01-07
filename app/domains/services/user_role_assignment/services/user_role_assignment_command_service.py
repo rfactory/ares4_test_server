@@ -1,17 +1,39 @@
 # --- Command-related Service ---
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from typing import List, Optional
 
-from app.core.exceptions import DuplicateEntryError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.models.objects.user import User
-from app.models.objects.role import Role # Needed for headcount check
-from app.models.objects.organization import Organization # 조직 존재 여부 확인용
+from app.models.objects.role import Role
 from app.models.relationships.user_organization_role import UserOrganizationRole
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 from ..crud.user_role_assignment_command_crud import user_role_assignment_crud_command
 from ..schemas.user_role_assignment_command import UserRoleAssignmentCreate
 
 class UserRoleAssignmentCommandService:
+
+    def update_user_roles(
+        self,
+        db: Session,
+        *,
+        target_user: User,
+        roles_to_assign: Optional[List[Role]] = None,
+        roles_to_revoke: Optional[List[Role]] = None,
+        actor_user: User,
+    ) -> None:
+        """
+        사용자의 역할을 일괄적으로 업데이트합니다. (할당 및 해제)
+        상위 Policy에서 모든 유효성 검사 및 후속 조치를 담당합니다.
+        """
+        roles_to_assign = roles_to_assign or []
+        roles_to_revoke = roles_to_revoke or []
+
+        for role in roles_to_revoke:
+            self._internal_revoke_role(db, target_user=target_user, role=role, actor_user=actor_user)
+
+        for role in roles_to_assign:
+            self._internal_assign_role(db, target_user=target_user, role=role, actor_user=actor_user)
+
     def assign_role(
         self,
         db: Session,
@@ -20,62 +42,68 @@ class UserRoleAssignmentCommandService:
         request_user: User,
     ) -> UserOrganizationRole:
         """
-        Assigns a role to a user within an organization.
-        This service assumes authorization has already been checked by a Policy.
+        사용자에게 단일 역할을 할당하는 공개 메소드입니다.
+        상위 Policy에서 모든 유효성 검사 및 후속 조치를 담당합니다.
         """
-        # 방어적 확인: user_id, role_id, organization_id가 유효한지 확인
-        existing_user = db.query(User).filter(User.id == assignment_in.user_id).first()
-        if not existing_user:
-            raise NotFoundError("User", str(assignment_in.user_id))
-        
-        existing_role = db.query(Role).filter(Role.id == assignment_in.role_id).first()
-        if not existing_role:
+        role = db.query(Role).filter(Role.id == assignment_in.role_id).first()
+        if not role:
             raise NotFoundError("Role", str(assignment_in.role_id))
+        
+        user = db.query(User).filter(User.id == assignment_in.user_id).first()
+        if not user:
+            raise NotFoundError("User", str(assignment_in.user_id))
 
-        if assignment_in.organization_id is not None:
-            existing_organization = db.query(Organization).filter(Organization.id == assignment_in.organization_id).first()
-            if not existing_organization:
-                raise NotFoundError("Organization", str(assignment_in.organization_id))
+        return self._internal_assign_role(db, target_user=user, role=role, actor_user=request_user, organization_id=assignment_in.organization_id)
 
-        # 1. Check for duplicate assignment
+    def _internal_assign_role(
+        self,
+        db: Session,
+        *,
+        target_user: User,
+        role: Role,
+        actor_user: User,
+        organization_id: Optional[int] = None
+    ) -> UserOrganizationRole:
+        """
+        역할 할당의 핵심 내부 로직. 순수하게 할당만 실행합니다.
+        """
         existing_assignment = user_role_assignment_crud_command.get_by_user_role_org(
-            db,
-            user_id=assignment_in.user_id,
-            role_id=assignment_in.role_id,
-            organization_id=assignment_in.organization_id,
+            db, user_id=target_user.id, role_id=role.id, organization_id=organization_id
         )
         if existing_assignment:
-            raise DuplicateEntryError("Role assignment", "user, role, and organization")
+            return existing_assignment
 
-        # 2. Enforce Role Headcount Limits (Requires fetching the Role object)
-        # Note: existing_role is already fetched above as part of defensive checks.
-        if existing_role and existing_role.max_headcount is not None:
-            current_count = (
-                db.query(func.count(UserOrganizationRole.user_id))
-                .filter(UserOrganizationRole.role_id == existing_role.id)
-                .scalar()
-            )
-            if current_count >= existing_role.max_headcount:
-                raise DuplicateEntryError(
-                    f"Cannot assign {existing_role.name}. Maximum headcount of {existing_role.max_headcount} already reached."
-                )
-
-        # 3. Create new assignment via CRUD
-        new_assignment = user_role_assignment_crud_command.create(db, obj_in=assignment_in)
+        assignment_schema = UserRoleAssignmentCreate(user_id=target_user.id, role_id=role.id, organization_id=organization_id)
+        new_assignment = user_role_assignment_crud_command.create(db, obj_in=assignment_schema)
         
-        # ← 여기만 삭제하면 끝!
-        # db.commit()     ← 삭제
-        # db.refresh()    ← 삭제
+        audit_command_provider.log(
+            db=db, 
+            actor_user=actor_user, 
+            event_type="USER_ROLE_ASSIGNED",
+            description=f"Role '{role.name}' assigned to user '{target_user.username}'",
+            details=new_assignment.as_dict()
+        )
+        return new_assignment
 
-        # 5. Audit log (Policy에서 commit 할 때 함께 저장됨)
-        audit_command_provider.log_creation(
-            db=db,
-            actor_user=request_user,
-            resource_name="UserRoleAssignment",
-            resource_id=new_assignment.id,
-            new_value=new_assignment.as_dict()
+    def _internal_revoke_role(self, db: Session, *, target_user: User, role: Role, actor_user: User):
+        """
+        역할 해제의 핵심 내부 로직.
+        """
+        org_id = role.organization_id if role.scope == 'ORGANIZATION' else None
+
+        assignment_to_delete = user_role_assignment_crud_command.get_by_user_role_org(
+            db, user_id=target_user.id, role_id=role.id, organization_id=org_id
         )
 
-        return new_assignment  # ← 여기서 끝! Policy에서 commit
+        if assignment_to_delete:
+            deleted_value = assignment_to_delete.as_dict()
+            user_role_assignment_crud_command.remove(db, id=assignment_to_delete.id)
+            audit_command_provider.log(
+                db=db, 
+                actor_user=actor_user, 
+                event_type="USER_ROLE_REVOKED",
+                description=f"Role '{role.name}' revoked from user '{target_user.username}'",
+                details=deleted_value
+            )
 
 user_role_assignment_command_service = UserRoleAssignmentCommandService()

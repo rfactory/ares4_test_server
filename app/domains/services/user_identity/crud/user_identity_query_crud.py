@@ -6,6 +6,9 @@ from app.models.objects.user import User
 from ..schemas.user_identity_command import UserCreate, UserUpdate # Even query CRUD needs these for the base class
 
 class CRUDUserQuery(CRUDBase[User, UserCreate, UserUpdate]):
+    def get_by_id(self, db: Session, *, user_id: int) -> Optional[User]:
+        return super().get(db, id=user_id)
+
     def get_by_username(self, db: Session, *, username: str) -> Optional[User]:
         return db.query(User).filter(User.username == username).first()
 

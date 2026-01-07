@@ -40,11 +40,11 @@ def verify_access_token(token: str) -> TokenData:
     )
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]) # Corrected attribute names
-        username: str = payload.get("sub")
-        if username is None:
+        user_id: int = int(payload.get("sub"))
+        if user_id is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
-    except JWTError:
+        token_data = TokenData(id=user_id)
+    except (JWTError, ValueError):
         raise credentials_exception
     return token_data
 

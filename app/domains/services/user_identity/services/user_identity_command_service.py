@@ -28,9 +28,32 @@ class UserIdentityCommandService:
 
         audit_command_provider.log(
             db=db,
-            event_type="USER_CREATED",
+            event_type="AUDIT",
             description=f"New user '{db_obj.username}' created by {'system' if not created_by else created_by.username}. Active: {is_active}",
             actor_user=created_by if created_by else db_obj,
+            target_user=db_obj,
+            details={"email": db_obj.email}
+        )
+        return db_obj
+
+    def create_user_with_prehashed_password(self, db: Session, *, user_data: Dict[str, Any], is_active: bool = True) -> DBUser:
+        """
+        사전에 해시된 비밀번호를 사용하여 새로운 사용자를 생성하고 감사 로그를 기록합니다.
+        (회원가입 완료 시나리오용)
+        """
+        create_data = {
+            "username": user_data["username"],
+            "email": user_data["email"],
+            "password_hash": user_data["hashed_password"],
+            "is_active": is_active
+        }
+        db_obj = user_identity_command_crud.create_with_hashed_password(db, create_data=create_data)
+
+        audit_command_provider.log(
+            db=db,
+            event_type="AUDIT",
+            description=f"New user '{db_obj.username}' created after email verification.",
+            actor_user=db_obj,
             target_user=db_obj,
             details={"email": db_obj.email}
         )
@@ -45,12 +68,10 @@ class UserIdentityCommandService:
         old_value = db_user.as_dict()
         update_data = user_in.model_dump(exclude_unset=True)
 
-        # 1. 데이터 변환 (e.g., 비밀번호 해싱)
         for field, func in USER_UPDATE_TRANSFORMERS.items():
             if field in update_data:
                 func(update_data)
 
-        # 2. 유효성 검사 (e.g., 사용자 이름, 이메일 중복 확인)
         for field, value in update_data.items():
             if field in USER_UPDATE_VALIDATORS:
                 USER_UPDATE_VALIDATORS[field](db, db_user, value)
@@ -58,13 +79,13 @@ class UserIdentityCommandService:
         updated_user = user_identity_command_crud.update(db, db_obj=db_user, obj_in=update_data)
         db.flush()
 
-        audit_command_provider.log_update(
+        audit_command_provider.log(
             db=db,
+            event_type="AUDIT",
+            description=f"User '{updated_user.username}' (ID: {updated_user.id}) updated by '{actor_user.username}'.",
             actor_user=actor_user,
-            resource_name="User",
-            resource_id=updated_user.id,
-            old_value=old_value,
-            new_value=updated_user.as_dict()
+            target_user=updated_user,
+            details={"old_value": old_value, "new_value": updated_user.as_dict()}
         )
         return updated_user
 
@@ -74,20 +95,16 @@ class UserIdentityCommandService:
         if not db_user:
             raise NotFoundError("User", str(user_id))
 
-        old_value = db_user.as_dict()
-        
         # CRUD의 remove는 is_active=False로 설정하는 soft-delete로 구현되어 있음
         deactivated_user = user_identity_command_crud.remove(db, id=user_id)
         db.flush()
 
-        # 비활성화는 상태 변경이므로 log_update 사용
-        audit_command_provider.log_update(
+        audit_command_provider.log(
             db=db,
+            event_type="AUDIT",
+            description=f"User '{deactivated_user.username}' (ID: {user_id}) deactivated by '{actor_user.username}'.",
             actor_user=actor_user,
-            resource_name="User",
-            resource_id=deactivated_user.id,
-            old_value=old_value,
-            new_value=deactivated_user.as_dict()
+            target_user=deactivated_user
         )
         return deactivated_user
 
@@ -98,14 +115,13 @@ class UserIdentityCommandService:
         db.add(user)
         db.flush()
         
-        audit_command_provider.log_update(
+        audit_command_provider.log(
             db=db,
-            event_type="USER_ACTIVATED",
-            resource_name="User",
-            resource_id=user.id,
+            event_type="AUDIT",
+            description=f"User '{user.username}' (ID: {user.id}) activated by '{actor_user.username if actor_user else 'system'}'.",
             actor_user=actor_user,
-            old_value=old_value,
-            new_value=user.as_dict()
+            target_user=user,
+            details={"old_value": old_value, "new_value": user.as_dict()}
         )
         return user
 

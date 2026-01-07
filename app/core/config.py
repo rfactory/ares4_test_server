@@ -60,7 +60,10 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # --- Invitation Settings ---
+    INVITATION_EXPIRATION_HOURS: int = 24
+
+    model_config = SettingsConfigDict(extra="ignore")
 
 @lru_cache
 def get_settings() -> Settings:

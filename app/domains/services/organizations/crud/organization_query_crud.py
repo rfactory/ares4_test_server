@@ -1,6 +1,7 @@
 # C:\vscode project files\Ares4\server2\app\domains\services\organizations\crud\organization_query_crud.py
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.models.objects.organization import Organization
 
@@ -24,5 +25,23 @@ class CRUDOrganizationQuery:
     def get_by_registration_number(self, db: Session, *, registration_number: str) -> Optional[Organization]:
         """사업자 등록 번호를 기준으로 특정 조직 정보를 조회합니다."""
         return db.query(Organization).filter(Organization.business_registration_number == registration_number).first()
+
+    def find_by_identifier(self, db: Session, *, identifier: str) -> Optional[Organization]:
+        """이름 또는 사업자 번호로 조직을 검색합니다."""
+        return db.query(Organization).filter(
+            or_(
+                Organization.company_name.ilike(f"%{identifier}%"),
+                Organization.business_registration_number == identifier
+            )
+        ).first()
+
+    def search_organizations(self, db: Session, *, search_term: str) -> List[Organization]:
+        """검색어(이름 또는 사업자 등록 번호)로 조직 목록을 조회합니다."""
+        return db.query(Organization).filter(
+            or_(
+                Organization.company_name.ilike(f"%{search_term}%"),
+                Organization.business_registration_number.ilike(f"%{search_term}%")
+            )
+        ).all()
 
 organization_crud_query = CRUDOrganizationQuery()

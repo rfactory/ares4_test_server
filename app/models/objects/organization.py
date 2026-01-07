@@ -34,10 +34,10 @@ class Organization(Base, TimestampMixin, OrganizationTypeFKMixin): # Organizatio
     billing_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 청구서 수신 주소
     tax_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # 세금 식별 번호
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True) # 조직에 대한 추가 설명
-   
+
     # --- 관계 정의 (외래 키) ---
     # organization_type_id는 OrganizationTypeFKMixin으로부터 상속받습니다.
-   
+
     # --- Relationships ---
     roles = relationship("Role", back_populates="organization") # 이 조직에 정의된 역할 목록
     user_roles = relationship("UserOrganizationRole", back_populates="organization") # 이 조직에 속한 사용자-역할 관계 목록

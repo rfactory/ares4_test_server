@@ -4,12 +4,14 @@ from typing import Optional, List
 from app.models.objects.user import User as DBUser
 
 # Schemas from other domains are the 'contract' for the coordinator to use
-from app.domains.services.user_identity.schemas.user import UserCreate
-from app.domains.services.access_requests.schemas.access_request import AccessRequestCreate, AccessRequestUpdate, AccessRequestResponse
+from app.domains.inter_domain.user_identity.schemas.user_identity_command import UserCreate
+from app.domains.inter_domain.access_requests.schemas.access_request_command import AccessRequestCreate, AccessRequestUpdate
+from app.domains.inter_domain.access_requests.schemas.access_request_query import AccessRequestRead
 
 # Inter-domain providers
-from app.domains.inter_domain.user_identity.providers import user_identity_providers
-from server2.app.domains.inter_domain.access_requests.access_requests_command_provider import access_request_providers
+from app.domains.inter_domain.user_identity.user_identity_query_provider import user_identity_query_provider
+from app.domains.inter_domain.access_requests.access_requests_command_provider import access_request_command_providers
+from app.domains.inter_domain.access_requests.access_requests_query_provider import access_request_query_provider
 
 class UserManagementCoordinator:
     async def create_user_and_request_access(
@@ -17,13 +19,12 @@ class UserManagementCoordinator:
         db: Session,
         *,
         access_request_in: AccessRequestCreate,
-    ) -> AccessRequestResponse:
+    ) -> AccessRequestRead:
         """
         Orchestrates the creation of a user (if they don't exist) and an access request for that user.
         This is a high-level workflow for initiating user and access request.
         """
-        # 1. User Creation/Retrieval (delegated to user_identity service)
-        target_user = user_identity_providers.get_user_by_email(db, email=access_request_in.email)
+        target_user = user_identity_query_provider.get_user_by_email(db, email=access_request_in.email)
         if not target_user:
             if not access_request_in.password or not access_request_in.username:
                 raise ValueError("Password and username are required for new user registrations.")
@@ -32,24 +33,21 @@ class UserManagementCoordinator:
                 email=access_request_in.email,
                 password=access_request_in.password
             )
-            target_user = await user_identity_providers.create_user_and_log(db, user_in=user_in_create, is_active=False)
+            target_user = await user_identity_query_provider.create_user_and_log(db, user_in=user_in_create, is_active=False)
 
-        # 2. Access Request Creation (delegated to access_requests service)
-        # Note: The `request_user` is None here, as this workflow is initiated by an unauthenticated user.
-        # The service will handle the actor logging appropriately.
-        db_access_request = await access_request_providers.create_access_request(
+        db_access_request = await access_request_command_providers.create_access_request(
             db=db,
             request_in=access_request_in,
-            request_user=None
+            user_id=target_user.id,
+            actor_user=target_user
         )
         return db_access_request
 
-    def get_access_requests(self, db: Session, *, current_user: DBUser, skip: int = 0, limit: int = 100, status: Optional[str] = "pending") -> List[AccessRequestResponse]:
+    def get_access_requests(self, db: Session, *, current_user: DBUser, skip: int = 0, limit: int = 100, status: Optional[str] = "pending") -> List[AccessRequestRead]:
         """
         Orchestrates retrieving access requests.
         """
-        # This is a simple pass-through for now, but could contain more complex logic later.
-        return access_request_providers.get_access_requests(db, current_user=current_user, skip=skip, limit=limit, status=status)
+        return access_request_query_provider.get_pending_requests_for_actor(db, actor_user=current_user, organization_id=None)
 
     async def process_access_request_workflow(
         self,
@@ -58,15 +56,15 @@ class UserManagementCoordinator:
         request_id: int,
         update_in: AccessRequestUpdate,
         admin_user: DBUser
-    ) -> AccessRequestResponse:
+    ) -> AccessRequestRead:
         """
         Orchestrates the processing (approval/rejection) of an access request.
         """
-        return await access_request_providers.process_access_request(
-            db=db,
-            request_id=request_id,
-            update_in=update_in,
-            admin_user=admin_user
-        )
+        if update_in.status == "approved":
+            from app.domains.inter_domain.policies.access_requests.approve_request_policy_provider import approve_request_policy_provider
+            return approve_request_policy_provider.execute(db=db, request_id=request_id, admin_user=admin_user)
+        elif update_in.status == "rejected":
+            from app.domains.inter_domain.policies.access_requests.reject_request_policy_provider import reject_request_policy_provider
+            return reject_request_policy_provider.execute(db=db, request_id=request_id, admin_user=admin_user)
 
 user_management_coordinator = UserManagementCoordinator()

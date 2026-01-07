@@ -8,7 +8,7 @@ COMPOSE_FILE="docker-compose.v2.yml"
 
 echo "Starting all services..."
 # --build 옵션 때문에 컨테이너가 재생성되면서 권한이 리셋될 수 있습니다.
-docker-compose -f "$COMPOSE_FILE" up -d --build
+docker-compose --env-file ./shared_config/.env -f "$COMPOSE_FILE" up -d --build
 
 # ------------------------------------------------------------------
 # [추가된 부분] 컨테이너가 켜지자마자 "스마트 권한 설정"을 다시 적용합니다.

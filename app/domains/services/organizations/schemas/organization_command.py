@@ -73,3 +73,10 @@ class OrganizationUpdate(OrganizationBase):
     OrganizationBase를 그대로 상속받아 모든 필드가 Optional이므로, 부분적인 데이터 수정(Partial Update)이 가능합니다.
     """
     pass
+
+
+# --- Organization Type Schemas ---
+
+class OrganizationTypeCreate(BaseModel):
+    name: str
+    description: Optional[str] = None

@@ -18,3 +18,13 @@ class UserInDBBase(UserBase):
 
 class User(UserInDBBase):
     pass
+
+# --- Schemas for Token --- #
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class UserWithToken(BaseModel):
+    user: User
+    token: Token

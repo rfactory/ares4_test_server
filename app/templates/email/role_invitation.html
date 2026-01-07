@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>You have been invited!</title>
+</head>
+<body>
+    <h2>Hello, {{ invited_username }}!</h2>
+    <p>You have been invited by <b>{{ inviting_admin }}</b> to take on the role of <b>{{ role_name }}</b> in the <b>{{ organization_name }}</b> context.</p>
+    <p>To accept this invitation, please use the following verification code on the acceptance page:</p>
+    <h3>{{ verification_code }}</h3>
+    <p>This code will expire in {{ expiration_hours }} hours.</p>
+    <p>Thank you,</p>
+    <p>The Ares Team</p>
+</body>
+</html>

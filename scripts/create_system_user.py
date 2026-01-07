@@ -1,7 +1,6 @@
 import os
 import sys
 import asyncio
-from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -11,13 +10,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app.database import SessionLocal
 from app.core.security import get_password_hash
 
-# Load environment variables
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 async def create_system_user():
     """
     Ensures the system user with ID=1 exists in the database.
-    This uses credentials from .env to match MQTT configuration.
+    This uses credentials from the environment to match MQTT configuration.
     """
     db: Session = SessionLocal()
     try:
@@ -38,7 +35,7 @@ async def create_system_user():
 
         print(f"System user not found. Creating user '{mqtt_username}' with ID=1...")
 
-        # Hash the password from .env
+        # Hash the password from environment
         hashed_password = get_password_hash(mqtt_password)
         
         # Use raw SQL to insert the user
@@ -54,6 +51,12 @@ async def create_system_user():
         )
         db.commit()
         print(f"Successfully created system user '{mqtt_username}' with id=1.")
+
+        # Reset the sequence to avoid ID collision
+        print("Resetting user ID sequence...")
+        db.execute(text("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));"))
+        db.commit()
+        print("User ID sequence reset.")
 
     except Exception as e:
         print(f"Error creating system user: {e}")

@@ -3,7 +3,7 @@ set -e
 # set -x # 디버깅 필요 시 주석 해제
 
 COMPOSE_FILE="docker-compose.v2.yml"
-ENV_FILE="./server2/.env"
+ENV_FILE="./shared_config/.env"
 
 echo_header() {
     echo "\n======================================================================"

@@ -9,6 +9,7 @@ from .objects.device import Device
 from .objects.hardware_blueprint import HardwareBlueprint
 from .objects.supported_component import SupportedComponent
 from .objects.subscription_plan import SubscriptionPlan
+from .objects.governance import GovernanceRule # 새로 추가
 # TODO: RegistrationRequest 모델은 현재 사용되지 않으며, 해당 파일이 존재하지 않습니다. (2025-12-02)
 # from .objects.registration_request import RegistrationRequest
 
@@ -64,6 +65,7 @@ __all__ = [
     "HardwareBlueprint",
     "SupportedComponent",
     "SubscriptionPlan",
+    "GovernanceRule", # 새로 추가
     # "RegistrationRequest", # TODO: 모델 복원 시 주석 해제
 
     "UserOrganizationRole",

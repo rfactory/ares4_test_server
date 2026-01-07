@@ -45,5 +45,6 @@ class User(Base, TimestampMixin):
     audit_logs = relationship("AuditLog", back_populates="user") # 사용자가 생성한 감사 로그 목록
 
     # New unified access requests relationships
-    access_requests_as_requester = relationship("AccessRequest", foreign_keys="AccessRequest.user_id", back_populates="user") # 이 사용자가 요청한 접근 요청 목록
-    access_requests_as_reviewer = relationship("AccessRequest", foreign_keys="AccessRequest.reviewed_by_user_id", back_populates="reviewed_by_user") # 이 사용자가 검토한 접근 요청 목록
+    access_requests_for_user = relationship("AccessRequest", foreign_keys="AccessRequest.user_id", back_populates="user") # 이 사용자가 요청한 접근 요청 목록
+    reviewed_access_requests = relationship("AccessRequest", foreign_keys="AccessRequest.reviewed_by_user_id", back_populates="reviewed_by") # 이 사용자가 검토한 접근 요청 목록
+    initiated_invitations = relationship("AccessRequest", foreign_keys="AccessRequest.initiated_by_user_id", back_populates="initiated_by") # 이 사용자가 시작한 초대 목록

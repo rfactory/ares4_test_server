@@ -11,4 +11,8 @@ class UserRoleAssignmentQueryProvider:
         """특정 사용자의 모든 역할 할당을 조회하는 안정적인 인터페이스를 제공합니다."""
         return user_role_assignment_query_service.get_assignments_for_user(db=db, user_id=user_id)
 
+    def get_user_count_for_role(self, db: Session, *, role_id: int) -> int:
+        """특정 역할에 할당된 사용자 수를 조회하는 안정적인 인터페이스를 제공합니다."""
+        return user_role_assignment_query_service.get_user_count_for_role(db=db, role_id=role_id)
+
 user_role_assignment_query_provider = UserRoleAssignmentQueryProvider()

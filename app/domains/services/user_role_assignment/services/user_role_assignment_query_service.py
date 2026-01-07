@@ -10,4 +10,8 @@ class UserRoleAssignmentQueryService:
         """Gets all role assignments for a specific user."""
         return user_role_assignment_query_crud.get_assignments_by_user(db, user_id=user_id)
 
+    def get_user_count_for_role(self, db: Session, *, role_id: int) -> int:
+        """Gets the number of users assigned to a specific role."""
+        return user_role_assignment_query_crud.get_count_by_role_id(db, role_id=role_id)
+
 user_role_assignment_query_service = UserRoleAssignmentQueryService()

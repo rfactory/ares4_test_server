@@ -195,13 +195,13 @@ class LogBaseMixin:
     """
     @declared_attr
     def event_type(cls):
-        return Column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 'SERVER_CERTIFICATE_ACQUIRED_NEW', name='log_event_type'), 
-                      nullable=False, comment="로그 유형 (온톨로지 통합 쿼리 용)")
+        return Column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 'SERVER_CERTIFICATE_ACQUIRED_NEW', 'ORGANIZATION_CREATED', 'ORGANIZATION_UPDATED', 'ORGANIZATION_DELETED', name='log_event_type'), 
+                    nullable=False, comment="로그 유형 (온톨로지 통합 쿼리 용)")
 
     @declared_attr
     def log_level(cls):
         return Column(Enum('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', name='log_level'), 
-                      nullable=True, comment="로그 심각도 (선택적)")
+                    nullable=True, comment="로그 심각도 (선택적)")
 
     @declared_attr
     def description(cls):

@@ -1,19 +1,22 @@
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict # ConfigDict 추가
-
-# 조회 관련 스키마
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
 
 class AccessRequestRead(BaseModel):
-    """접근 요청 조회 결과를 위한 스키마."""
-    id: int = Field(..., description="접근 요청 고유 ID")
-    user_id: int = Field(..., description="요청 대상 사용자 ID")
-    requested_role_id: int = Field(..., description="요청된 역할 ID")
-    organization_id: Optional[int] = Field(None, description="대상 조직 ID (기업용 요청인 경우)")
-    status: str = Field(..., description="요청 상태 (pending, approved, rejected)")
-    reason: Optional[str] = Field(None, description="요청 사유")
-    # 추가 필드 (예: 생성 시간, 검토자 ID 등)는 필요에 따라 포함
+    id: int
+    user_id: int
+    requested_role_id: int
+    organization_id: Optional[int] = None
+    reason: Optional[str] = None
+    status: str
+    type: str
+    initiated_by_user_id: int
+    created_at: datetime
+    updated_at: datetime
+    verification_code_expires_at: Optional[datetime] = None
 
-    model_config = ConfigDict(from_attributes=True) # Pydantic v2 스타일로 변경
+    class Config:
+        from_attributes = True
 
 class AccessRequestQuery(BaseModel):
     """접근 요청 목록 필터링을 위한 스키마."""
