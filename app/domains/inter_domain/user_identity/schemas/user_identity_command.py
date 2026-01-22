@@ -5,9 +5,11 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 # Re-exporting from the service layer schema
-from ....services.user_identity.schemas.user_identity_command import UserCreate, UserUpdate
+from ....services.user_identity.schemas.user_identity_command import UserCreate, UserUpdate, RoleIdRequest
 
 class CompleteRegistration(BaseModel):
     email: EmailStr
     verification_code: str
 
+class ContextSwitchRequest(BaseModel):
+    organization_id: int

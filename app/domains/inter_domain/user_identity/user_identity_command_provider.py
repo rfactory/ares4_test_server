@@ -6,6 +6,10 @@ from app.models.objects.user import User
 from app.domains.services.user_identity.schemas.user_identity_command import UserCreate, UserUpdate
 
 class UserIdentityCommandProvider:
+    def get_password_hash(self, *, password: str) -> str:
+        """비밀번호를 해시하여 반환합니다."""
+        return user_identity_command_service.get_password_hash(password=password)
+
     async def create_user_and_log(self, db: Session, *, user_in: UserCreate, created_by: Optional[User] = None, is_active: bool = True) -> User:
         return await user_identity_command_service.create_user_and_log(db, user_in=user_in, created_by=created_by, is_active=is_active)
 

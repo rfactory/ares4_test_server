@@ -36,11 +36,9 @@ class RoleQueryService:
         """
         if organization_id:
             # 조직 컨텍스트에서 조회하는 경우, 해당 조직의 역할만 반환
-            # TODO: 엔드포인트 레벨에서 요청한 사용자가 이 organization_id에 대해 관리 권한이 있는지 확인해야 함.
             return role_query_crud.get_roles_by_organization_id(db, organization_id=organization_id)
         else:
             # 시스템 컨텍스트에서 조회하는 경우, SYSTEM 스코프의 역할만 반환
-            # TODO: 엔드포인트 레벨에서 요청한 사용자가 SYSTEM 스코프에 대해 관리 권한이 있는지 확인해야 함.
             return role_query_crud.get_roles_by_scope(db, scope='SYSTEM')
 
     def get_permissions_for_role(self, db: Session, *, role_id: int) -> List[RolePermission]:

@@ -1,23 +1,27 @@
-from sqlalchemy import Column, Integer, String, UniqueConstraint
-from sqlalchemy.orm import relationship
-from app.database import Base
-from ..base_model import TimestampMixin, HardwareBlueprintFKMixin # Changed BlueprintFKMixin to HardwareBlueprintFKMixin
+from sqlalchemy import Column, BigInteger, String, UniqueConstraint, Integer # Integer 추가
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import Optional
 
-class BlueprintValidPin(Base, TimestampMixin, HardwareBlueprintFKMixin): # Changed BlueprintFKMixin to HardwareBlueprintFKMixin
+from app.database import Base
+from ..base_model import TimestampMixin, HardwareBlueprintFKMixin
+
+class BlueprintValidPin(Base, TimestampMixin, HardwareBlueprintFKMixin):
     """
     블루프린트 유효 핀 모델은 특정 하드웨어 블루프린트에서
     물리적으로 사용 가능한 핀의 목록과 그 특성을 정의합니다.
     """
     __tablename__ = "blueprint_valid_pins"
     __table_args__ = (
-        UniqueConstraint('hardware_blueprint_id', 'pin_number', name='_blueprint_valid_pin_uc'), # Changed blueprint_id to hardware_blueprint_id
+        # 특정 하드웨어 설계도 내에서 핀 번호는 중복될 수 없습니다.
+        UniqueConstraint('hardware_blueprint_id', 'pin_number', name='_blueprint_valid_pin_uc'),
     )
 
-    id = Column(Integer, primary_key=True, index=True) # 유효 핀의 고유 ID
-    # hardware_blueprint_id는 HardwareBlueprintFKMixin으로부터 상속받습니다.
-    pin_number = Column(Integer, nullable=False) # 해당 블루프린트에서 사용 가능한 물리적 핀 번호
-    pin_type = Column(String(50), nullable=True) # 핀의 타입 (예: 'GPIO', 'ADC', 'PWM')
-    description = Column(String(255), nullable=True) # 핀에 대한 설명
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    
+    # 해당 라즈베리파이/보드 모델에서 실제로 존재하는 물리 핀 번호
+    pin_number: Mapped[int] = mapped_column(Integer, nullable=False) 
+    pin_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # 예: 'GPIO', 'I2C_SDA', '5V'
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) 
     
     # --- Relationships ---
-    blueprint = relationship("HardwareBlueprint", back_populates="blueprint_valid_pins") # 이 유효 핀이 속한 하드웨어 블루프린트 정보
+    blueprint = relationship("HardwareBlueprint", back_populates="blueprint_valid_pins")

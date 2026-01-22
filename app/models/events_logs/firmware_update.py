@@ -1,5 +1,5 @@
 # app/models/events_logs/firmware_update.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
 from typing import Optional # Added Optional
 from datetime import datetime # Added datetime
@@ -12,16 +12,16 @@ class FirmwareUpdate(Base, TimestampMixin, DeviceFKMixin, HardwareBlueprintFKMix
     이는 장치 유지보수 및 버전 관리에 사용됩니다.
     """
     __tablename__ = "firmware_updates"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 펌웨어 업데이트 기록의 고유 ID
-    # device_id는 DeviceFKMixin으로부터 상속받습니다.
-    # hardware_blueprint_id는 HardwareBlueprintFKMixin으로부터 상속받습니다.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 펌웨어 업데이트 기록의 고유 ID
+    # device_id는 DeviceFKMixin으로부터 상속받습니다. (BigInteger)
+    # hardware_blueprint_id는 HardwareBlueprintFKMixin으로부터 상속받습니다. (BigInteger)
     firmware_version: Mapped[str] = mapped_column(String(50), nullable=False) # 업데이트된 펌웨어의 버전
     update_status: Mapped[str] = mapped_column(Enum('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLBACK', name='update_status', create_type=False), default='PENDING', nullable=False) # 펌웨어 업데이트의 현재 상태 ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLBACK')
     initiated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False) # 펌웨어 업데이트가 시작된 시간
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 펌웨어 업데이트가 완료된 시간
    
     # 명시적으로 외래 키 컬럼 정의
-    initiated_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True) # 펌웨어 업데이트를 시작한 사용자 ID
+    initiated_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('users.id'), nullable=True) # 펌웨어 업데이트를 시작한 사용자 ID
    
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 펌웨어 업데이트에 대한 추가 메모
    

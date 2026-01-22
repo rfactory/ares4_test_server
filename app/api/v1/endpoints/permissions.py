@@ -9,11 +9,11 @@ from app.domains.inter_domain.permissions.permission_query_provider import permi
 router = APIRouter()
 
 @router.get(
-    "/",
+    "",
     response_model=List[PermissionResponse],
     dependencies=[Depends(PermissionChecker("permission:read"))] # 권한 적용
 )
-def get_permissions(db: Session = Depends(get_db)) -> List[PermissionResponse]:
+async def get_permissions(db: Session = Depends(get_db)) -> List[PermissionResponse]:
     """
     권한 목록을 조회합니다.
     """

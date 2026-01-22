@@ -6,6 +6,8 @@ from typing import Optional, Literal
 from app.core.crud_base import CRUDBase
 from ..schemas.access_request_command import AccessRequestCreate, AccessRequestUpdate
 
+from app.models.objects.access_request import AccessRequest
+
 # CRUDAccessRequestCommand 클래스를 먼저 정의합니다.
 class CRUDAccessRequestCommand(CRUDBase['AccessRequest', AccessRequestCreate, AccessRequestUpdate]):
     def create(
@@ -39,5 +41,5 @@ class CRUDAccessRequestCommand(CRUDBase['AccessRequest', AccessRequestCreate, Ac
         return db_obj
 
 # 인스턴스는 클래스 정의 후에 생성합니다.
-from app.models.objects.access_request import AccessRequest
+# from app.models.objects.access_request import AccessRequest
 access_request_crud_command = CRUDAccessRequestCommand(AccessRequest)

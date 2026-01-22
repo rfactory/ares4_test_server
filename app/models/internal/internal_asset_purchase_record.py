@@ -1,6 +1,9 @@
 # app/models/internal/internal_asset_purchase_record.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Float, Text, Integer # Integer (quantity)
+from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
+from typing import Optional # Added Optional
+from datetime import datetime # Added datetime
+
 from app.database import Base
 from ..base_model import TimestampMixin, AssetDefinitionFKMixin # NullableUserFKMixin 제거
 class InternalAssetPurchaseRecord(Base, TimestampMixin, AssetDefinitionFKMixin): # Mixin 상속 제거
@@ -9,17 +12,17 @@ class InternalAssetPurchaseRecord(Base, TimestampMixin, AssetDefinitionFKMixin):
     이는 재고 관리 및 비용 추적에 사용됩니다.
     """
     __tablename__ = "internal_asset_purchase_records"
-    id = Column(Integer, primary_key=True, index=True) # 구매 기록의 고유 ID
-    # asset_definition_id는 AssetDefinitionFKMixin으로부터 상속받습니다.
-    quantity = Column(Integer, nullable=False) # 구매 수량
-    purchase_price_per_unit = Column(Float, nullable=False) # 단위당 구매 가격
-    supplier_name = Column(String(255), nullable=False) # 공급업체 이름
-    purchase_date = Column(DateTime(timezone=True), nullable=False) # 구매 일자
-    invoice_number = Column(String(255), nullable=True) # 관련 송장 번호
-    notes = Column(Text, nullable=True) # 구매 기록에 대한 추가 메모
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 구매 기록의 고유 ID
+    # asset_definition_id는 AssetDefinitionFKMixin으로부터 상속받습니다. (BigInteger)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False) # 구매 수량
+    purchase_price_per_unit: Mapped[float] = mapped_column(Float, nullable=False) # 단위당 구매 가격
+    supplier_name: Mapped[str] = mapped_column(String(255), nullable=False) # 공급업체 이름
+    purchase_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False) # 구매 일자
+    invoice_number: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 관련 송장 번호
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 구매 기록에 대한 추가 메모
    
     # 명시적으로 외래 키 컬럼 정의
-    recorded_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True) # 구매 기록을 입력한 사용자 ID
+    recorded_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('users.id'), nullable=True) # 구매 기록을 입력한 사용자 ID
    
     # --- Relationships ---
     asset_definition = relationship("InternalAssetDefinition", back_populates="purchase_records") # 구매된 자산의 정의 정보

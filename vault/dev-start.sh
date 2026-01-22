@@ -1,34 +1,47 @@
 #!/bin/sh
-# This script starts all services for the development environment.
-# It ensures permissions are enforced every time services are started.
-
+# 이 스크립트는 개발 환경의 모든 서비스를 시작합니다.
 set -e
 
+# 1. [경로 고정] 스크립트 위치를 기준으로 프로젝트 루트(Ares4)로 이동합니다.
+# 이렇게 하면 윈도우/리눅스 경로 변환 문제를 완벽하게 피할 수 있습니다.
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+cd "$SCRIPT_DIR/../.."
+
+# 2. [파일 경로] 이제 모든 경로는 현재 폴더(루트) 기준입니다.
 COMPOSE_FILE="docker-compose.v2.yml"
+ENV_FILE="shared_config/.env"
 
-echo "Starting all services..."
-# --build 옵션 때문에 컨테이너가 재생성되면서 권한이 리셋될 수 있습니다.
-docker-compose --env-file ./shared_config/.env -f "$COMPOSE_FILE" up -d --build
+echo "Current Working Directory: $(pwd)"
+echo "Loading variables from: $ENV_FILE"
+
+# 3. [환경 변수 로드] .env 파일을 읽어서 현재 쉘에 주입합니다.
+if [ -f "$ENV_FILE" ]; then
+    # export를 통해 docker-compose가 변수들을 즉시 인식하게 합니다.
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+else
+    echo "ERROR: .env file not found at $ENV_FILE"
+    exit 1
+fi
+
+# 4. [윈도우 경로 변환 방지] Git Bash 환경 필수 설정
+export MSYS_NO_PATHCONV=1
+
+echo "\n======================================================================"
+echo "=> Starting all services"
+echo "======================================================================"
+
+# 5. [실행] 이제 상대 경로를 사용하여 에러를 방지합니다.
+docker-compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
 
 # ------------------------------------------------------------------
-# [추가된 부분] 컨테이너가 켜지자마자 "스마트 권한 설정"을 다시 적용합니다.
+# [권한 복구 로직] 원본 그대로 유지
 # ------------------------------------------------------------------
-echo "Ensuring Smart Permissions (Dirs: 755, Files: 644)..."
-
-# 컨테이너가 뜰 때까지 잠깐 대기
+echo "\nEnsuring Smart Permissions (Dirs: 755, Files: 644)..."
 sleep 2
 
-# 1. 일단 다 755로 열어서 탐색 가능하게 만듦 (필수!)
-MSYS_NO_PATHCONV=1 docker exec -u 0 vault chmod -R 755 //vault/file
-
-# 2. 파일만 골라서 644로 다시 잠금 (보안 강화)
-MSYS_NO_PATHCONV=1 docker exec -u 0 vault find //vault/file -type f -exec chmod 644 {} +
-
-# 3. 소유권 도장 찍기
-MSYS_NO_PATHCONV=1 docker exec -u 0 vault chown -R vault:vault //vault/file
+docker exec -u 0 vault chmod -R 755 //vault/file
+docker exec -u 0 vault find //vault/file -type f -exec chmod 644 {} +
+docker exec -u 0 vault chown -R vault:vault //vault/file
 
 echo "Permissions verified."
-# ------------------------------------------------------------------
-
-echo "All services are starting in the background."
-echo "You can monitor the logs with the following command: docker-compose -f $COMPOSE_FILE logs -f"
+echo "Monitor logs: docker-compose --env-file $ENV_FILE -f $COMPOSE_FILE logs -f"

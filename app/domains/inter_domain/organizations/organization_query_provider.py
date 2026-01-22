@@ -8,8 +8,8 @@ class OrganizationQueryProvider:
     """
     Organization Query 서비스에 대한 공개 인터페이스입니다。
     """
-    def get_organization(self, db: Session, org_id: int) -> Optional[OrganizationResponse]:
-        return organization_query_service.get_organization(db, org_id=org_id)
+    def get_organization_by_id(self, db: Session, org_id: int) -> Optional[OrganizationResponse]:
+        return organization_query_service.get_organization_by_id(db, org_id=org_id)
 
     def get_organizations(self, db: Session, skip: int = 0, limit: int = 100) -> List[OrganizationResponse]:
         return organization_query_service.get_organizations(db, skip=skip, limit=limit)

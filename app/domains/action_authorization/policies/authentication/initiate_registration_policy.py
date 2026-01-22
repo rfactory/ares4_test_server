@@ -4,21 +4,24 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import DuplicateEntryError, ValidationError
 from app.core.config import settings
-from app.core.security import get_password_hash
 from app.core.utils import generate_random_code
 
 # Schemas
-from ....inter_domain.user_identity.schemas.user_identity_command import UserCreate
-from ....inter_domain.send_email.schemas.send_email_command import EmailSchema
-from ....inter_domain.registration_cache.schemas.registration_cache_command import CacheRegistrationData
+from app.domains.inter_domain.user_identity.schemas.user_identity_command import UserCreate
+from app.domains.inter_domain.send_email.schemas.send_email_command import EmailSchema
+from app.domains.inter_domain.registration_cache.schemas.registration_cache_command import CacheRegistrationData
+
+# Query Providers
+from app.domains.inter_domain.user_identity.user_identity_query_provider import user_identity_query_provider
 
 # Validator Providers
-from ....inter_domain.validators.user_existence.user_existence_validator_provider import user_existence_validator_provider
-from ....inter_domain.validators.password_strength.password_strength_validator_provider import password_strength_validator_provider
+from app.domains.inter_domain.validators.object_existence.object_existence_validator_provider import object_existence_validator_provider
+from app.domains.inter_domain.validators.password_strength.password_strength_validator_provider import password_strength_validator_provider
 
-# Service Providers
-from ....inter_domain.send_email.send_email_command_provider import send_email_command_provider
-from ....inter_domain.registration_cache.registration_cache_command_provider import registration_cache_command_provider
+# Command Providers
+from app.domains.inter_domain.user_identity.user_identity_command_provider import user_identity_command_provider
+from app.domains.inter_domain.send_email.send_email_command_provider import send_email_command_provider
+from app.domains.inter_domain.registration_cache.registration_cache_command_provider import registration_cache_command_provider
 
 class InitiateRegistrationPolicy:
     async def execute(self, db: Session, *, user_in: UserCreate):
@@ -30,17 +33,21 @@ class InitiateRegistrationPolicy:
         4. 이메일 발송
         """
         # 1. 유효성 검사
-        is_exist, _ = user_existence_validator_provider.validate(db, email=user_in.email)
-        if is_exist:
-            raise DuplicateEntryError("User", "email", user_in.email)
+        # 1.1. 이메일 중복 검사 (Query Provider 호출 -> 순수 Validator 호출)
+        existing_user = user_identity_query_provider.get_user_by_email(db, email=user_in.email)
+        object_existence_validator_provider.validate(
+            obj=existing_user, 
+            obj_name="User", 
+            identifier=user_in.email, 
+            should_exist=False
+        )
 
-        is_strong, reason = password_strength_validator_provider.validate_strength(user_in.password)
-        if not is_strong:
-            raise ValidationError(reason)
+        # 1.2. 비밀번호 강도 검사 (순수 Validator 호출)
+        password_strength_validator_provider.validate(user_in.password)
 
         # 2. 코드 생성 및 데이터 준비
         verification_code = generate_random_code()
-        hashed_password = get_password_hash(user_in.password)
+        hashed_password = user_identity_command_provider.get_password_hash(password=user_in.password) # Provider 호출
 
         # Create a Pydantic model instance instead of a dict
         cache_data = CacheRegistrationData(

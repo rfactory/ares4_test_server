@@ -1,13 +1,33 @@
 # app/models/objects/device.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, UUID, Index, Boolean, text
+from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Enum, UUID, Index, Boolean, text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
+import enum
 
 from app.database import Base
-from ..base_model import TimestampMixin, HardwareBlueprintFKMixin
+# SystemUnitFKMixin을 추가로 상속받습니다.
+from ..base_model import TimestampMixin, HardwareBlueprintFKMixin, SystemUnitFKMixin
 
-import enum
+if TYPE_CHECKING:
+    from app.models.objects.system_unit import SystemUnit
+    from app.models.relationships.device_role_assignment import DeviceRoleAssignment
+    from app.models.events_logs.unit_activity_log import UnitActivityLog
+    from app.models.objects.hardware_blueprint import HardwareBlueprint
+    from app.models.relationships.organization_device import OrganizationDevice
+    from app.models.relationships.device_component_instance import DeviceComponentInstance
+    from app.models.relationships.user_device import UserDevice
+    from app.models.relationships.schedule import Schedule
+    from app.models.relationships.alert_rule import AlertRule
+    from app.models.relationships.trigger_rule import TriggerRule
+    from app.models.events_logs.telemetry_data import TelemetryData
+    from app.models.events_logs.device_log import DeviceLog
+    from app.models.events_logs.firmware_update import FirmwareUpdate
+    from app.models.objects.image_registry import ImageRegistry
+    from app.models.objects.vision_feature import VisionFeature
+    from app.models.objects.action_log import ActionLog
+    from app.models.events_logs.alert_event import AlertEvent
+    from app.models.events_logs.consumable_usage_log import ConsumableUsageLog
 
 class DeviceStatusEnum(enum.Enum):
     UNKNOWN = "UNKNOWN"
@@ -16,44 +36,61 @@ class DeviceStatusEnum(enum.Enum):
     TIMEOUT = "TIMEOUT"
     RECOVERY_NEEDED = "RECOVERY_NEEDED" # 인증서 복구 필요 상태
 
-class Device(Base, TimestampMixin, HardwareBlueprintFKMixin):
+class Device(Base, TimestampMixin, HardwareBlueprintFKMixin, SystemUnitFKMixin):
     """
     장치 모델은 시스템에 등록된 각 하드웨어 장치의 고유한 식별 정보와 상태를 관리합니다.
+    이제 SystemUnitFKMixin을 통해 특정 클러스터(SystemUnit)의 일원으로 관리됩니다.
     """
     __tablename__ = "devices"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 장치의 고유 ID
+    # 1. PK를 BigInteger로 설정하여 시스템 전반의 타입 일관성을 유지합니다.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 장치의 고유 ID
     cpu_serial: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True) # 장치의 CPU 고유 시리얼 번호
-    current_uuid: Mapped[UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False, index=True) # 장치에 할당된 현재 UUID (Universally Unique Identifier)
-    hmac_key_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True) # Vault Transit Engine에 저장된 HMAC 키의 이름
+    current_uuid: Mapped[UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False, index=True) # 장치에 할당된 현재 UUID
+    hmac_key_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True) # Vault Transit Engine 키 이름
+    
     # --- 관계 정의 (외래 키) ---
     # hardware_blueprint_id는 HardwareBlueprintFKMixin으로부터 상속받습니다.
+    # system_unit_id는 SystemUnitFKMixin으로부터 상속받습니다.
 
     # --- 추가 속성 ---
-    visibility_status: Mapped[str] = mapped_column(Enum('PRIVATE', 'ORGANIZATION', 'PUBLIC', name='device_visibility', create_type=False), default='PRIVATE', nullable=False) # 장치의 공개 범위 상태 ('PRIVATE', 'ORGANIZATION', 'PUBLIC')
-    status: Mapped[DeviceStatusEnum] = mapped_column(Enum(DeviceStatusEnum, name='device_status', create_type=False), default=DeviceStatusEnum.UNKNOWN, nullable=False) # 장치의 현재 온라인/오프라인/타임아웃 상태
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # Soft delete를 위한 활성화 상태
+    visibility_status: Mapped[str] = mapped_column(Enum('PRIVATE', 'ORGANIZATION', 'PUBLIC', name='device_visibility', create_type=False), default='PRIVATE', nullable=False) # 공개 범위
+    status: Mapped[DeviceStatusEnum] = mapped_column(Enum(DeviceStatusEnum, name='device_status', create_type=False), default=DeviceStatusEnum.UNKNOWN, nullable=False) # 상태
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # 활성화 상태
     
-    # --- 기록 (기존) ---
-    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 장치가 마지막으로 시스템에 연결된 시간
+    # --- 기록 ---
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 마지막 연결 시간
 
     # --- 인증서 복구용 ---
-    recovery_token: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True) # 인증서 복구를 위한 일회용 토큰
-    recovery_token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 복구 토큰 만료 시간
+    recovery_token: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True) # 복구 토큰
+    recovery_token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 토큰 만료 시간
     
     # --- Relationships ---
-    hardware_blueprint = relationship("HardwareBlueprint", back_populates="devices") # 이 장치의 하드웨어 블루프린트 정보
-    organization_devices = relationship("OrganizationDevice", back_populates="device") # 이 장치가 할당된 조직 정보 (관계 테이블)
-    component_instances = relationship("DeviceComponentInstance", back_populates="device") # 이 장치에 설치된 컴포넌트 인스턴스 목록
-    users = relationship("UserDevice", back_populates="device") # 이 장치에 접근 권한이 있는 사용자 목록
-    schedules = relationship("Schedule", back_populates="device") # 이 장치와 관련된 스케줄 목록
-    alert_rules = relationship("AlertRule", back_populates="device") # 이 장치에 설정된 알림 규칙 목록
-    trigger_rules = relationship("TriggerRule", back_populates="device") # 이 장치에 설정된 트리거 규칙 목록
-    telemetry_data = relationship("TelemetryData", back_populates="device") # 이 장치에서 수집된 텔레메트리 데이터 기록 목록
-    device_logs = relationship("DeviceLog", back_populates="device") # 이 장치에서 발생한 로그 기록 목록
-    firmware_updates = relationship("FirmwareUpdate", back_populates="device") # 이 장치에 대한 펌웨어 업데이트 기록 목록
-    consumable_replacement_events = relationship("ConsumableReplacementEvent", back_populates="device") # 이 장치와 관련된 소모품 교체 이벤트 기록 목록
-    consumable_usage_logs = relationship("ConsumableUsageLog", back_populates="device") # 이 장치와 관련된 소모품 사용 기록 목록
-    alert_events = relationship("AlertEvent", back_populates="device") # 이 장치에서 발생한 알림 이벤트 기록 목록
-    production_events = relationship("ProductionEvent", back_populates="device") # 이 장치에서 발생한 생산 관리 이벤트 목록
-    replacement_events = relationship("InternalComponentReplacementEvent", back_populates="device") # 이 장치와 관련된 컴포넌트 교체 이벤트 목록
+    # 2. 신규 추가: 클러스터(SystemUnit)와의 관계 정의
+    system_unit: Mapped["SystemUnit"] = relationship("SystemUnit", back_populates="devices")
+    
+    # 3. 신규 추가: 기기에 할당된 다중 역할(DeviceRole)과의 N:M 관계
+    role_assignments: Mapped[List["DeviceRoleAssignment"]] = relationship("DeviceRoleAssignment", back_populates="device")
+    users: Mapped[List["UserDevice"]] = relationship("UserDevice", back_populates="device")
+    
+    # 4. 데이터 자산 및 AI/RL 관련 관계 추가
+    image_registries: Mapped[List["ImageRegistry"]] = relationship("ImageRegistry", back_populates="device")
+    vision_features: Mapped[List["VisionFeature"]] = relationship("VisionFeature", back_populates="device")
+    action_logs: Mapped[List["ActionLog"]] = relationship("ActionLog", back_populates="device")
+    alert_events: Mapped[List["AlertEvent"]] = relationship("AlertEvent", back_populates="device")
+    
+    # 5. 로그 및 모니터링
+    unit_activities: Mapped[List["UnitActivityLog"]] = relationship("UnitActivityLog", back_populates="device")
+    telemetry_data: Mapped[List["TelemetryData"]] = relationship("TelemetryData", back_populates="device")
+    device_logs: Mapped[List["DeviceLog"]] = relationship("DeviceLog", back_populates="device")
+    consumable_usage_logs: Mapped[List["ConsumableUsageLog"]] = relationship("ConsumableUsageLog",back_populates="device")
+    
+    # 5. 운영 및 설정
+    hardware_blueprint: Mapped["HardwareBlueprint"] = relationship("HardwareBlueprint", back_populates="devices")
+    organization_devices: Mapped[List["OrganizationDevice"]] = relationship("OrganizationDevice", back_populates="device")
+    component_instances: Mapped[List["DeviceComponentInstance"]] = relationship("DeviceComponentInstance", back_populates="device")
+    schedules: Mapped[List["Schedule"]] = relationship("Schedule", back_populates="device")
+    alert_rules: Mapped[List["AlertRule"]] = relationship("AlertRule", back_populates="device")
+    trigger_rules: Mapped[List["TriggerRule"]] = relationship("TriggerRule", back_populates="device")
+    firmware_updates: Mapped[List["FirmwareUpdate"]] = relationship("FirmwareUpdate", back_populates="device")
+    

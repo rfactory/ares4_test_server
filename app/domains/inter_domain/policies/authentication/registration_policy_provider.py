@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from sqlalchemy.orm import Session
+from fastapi import Request # Request 임포트
 
 from app.domains.action_authorization.policies.authentication.initiate_registration_policy import initiate_registration_policy
 from app.domains.action_authorization.policies.authentication.complete_registration_policy import complete_registration_policy
@@ -14,7 +15,7 @@ class RegistrationPolicyProvider:
     async def initiate_registration(self, db: Session, *, user_in: UserCreate) -> dict:
         return await initiate_registration_policy.execute(db, user_in=user_in)
 
-    def complete_registration(self, db: Session, *, email: str, verification_code: str) -> UserWithToken:
-        return complete_registration_policy.execute(db, email=email, verification_code=verification_code)
+    async def complete_registration(self, db: Session, *, email: str, verification_code: str, request: Request) -> UserWithToken:
+        return await complete_registration_policy.execute(db, email=email, verification_code=verification_code, request=request)
 
 registration_policy_provider = RegistrationPolicyProvider()

@@ -1,28 +1,45 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, Boolean, Enum
-from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
-from typing import Optional # Added Optional
-
+from sqlalchemy import BigInteger, String, Text, JSON, Boolean, Enum, ForeignKey
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import Optional
 from app.database import Base
-from ..base_model import TimestampMixin, DeviceFKMixin, UserFKMixin
+from ..base_model import TimestampMixin, UserFKMixin
 
-class AlertRule(Base, TimestampMixin, DeviceFKMixin, UserFKMixin):
+class AlertRule(Base, TimestampMixin, UserFKMixin):
     """
-    알림 규칙 모델은 특정 장치에서 발생하는 이벤트에 대해
-    사용자에게 알림을 보낼 조건을 정의합니다.
+    [Object] 알림 규칙 모델입니다.
+    개별 라즈베리파이가 아닌 'SystemUnit(클러스터)' 단위를 기본 감시 대상으로 하며, 
+    강화학습 모델이 유닛 전체의 상태를 분석하여 알림을 발생시키는 기준이 됩니다.
     """
     __tablename__ = "alert_rules"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 알림 규칙의 고유 ID
-    # device_id는 DeviceFKMixin으로부터 상속받습니다.
-    # user_id는 UserFKMixin으로부터 상속받습니다。
-    name: Mapped[str] = mapped_column(String(100), nullable=False) # 알림 규칙의 이름
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 알림 규칙에 대한 설명
-    condition: Mapped[dict] = mapped_column(JSON, nullable=False) # 알림 발생 조건 (JSON 형식, 예: {'metric': 'temperature', 'operator': '>', 'value': 30})
-    severity: Mapped[str] = mapped_column(Enum('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', name='alert_severity', create_type=False), default='MEDIUM', nullable=False) # 알림의 심각도 ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')
-    notification_channels: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # 알림을 전송할 채널 목록 (JSON 형식, 예: ['email', 'sms', 'app_push'])
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # 알림 규칙의 활성화 여부
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     
+    # --- 핵심: 클러스터(SystemUnit) 중심 연결 ---
+    # 사용자가 관리하는 '전체적인 관점'의 알림 대상입니다.
+    system_unit_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('system_units.id'), nullable=False, index=True)
+    
+    # "특별한 일"이 있을 때만 특정 장치를 타겟팅할 수 있도록 Nullable로 유지합니다.
+    device_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('devices.id'), nullable=True, index=True)
+    
+    # user_id는 UserFKMixin으로부터 상속받습니다. (BigInteger)
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False) # 알림 규칙 이름
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 알림 규칙 설명
+    
+    # 알림 발생 조건 (JSON 형식)
+    # 예: {'target': 'cluster_avg', 'metric': 'temp', 'operator': '>', 'value': 35}
+    condition: Mapped[dict] = mapped_column(JSON, nullable=False) 
+    
+    # 알림의 심각도
+    severity: Mapped[str] = mapped_column(Enum('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', name='alert_severity'), default='MEDIUM', nullable=False)
+    
+    # 알림 전송 채널 (JSON 형식)
+    notification_channels: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) 
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # 활성화 여부
+
     # --- Relationships ---
-    device = relationship("Device", back_populates="alert_rules") # 이 알림 규칙이 적용되는 장치 정보
-    user = relationship("User", back_populates="alert_rules") # 이 알림 규칙을 생성하거나 관리하는 사용자 정보
-    alert_events = relationship("AlertEvent", back_populates="alert_rule") # 이 알림 규칙에 의해 생성된 알림 이벤트 목록
+    system_unit = relationship("SystemUnit", back_populates="alert_rules")
+    device = relationship("Device", back_populates="alert_rules")
+    user = relationship("User", back_populates="alert_rules")
+    alert_events = relationship("AlertEvent", back_populates="alert_rule")

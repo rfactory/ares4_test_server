@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, UniqueConstraint, Enum
+from sqlalchemy import Column, BigInteger, String, Text, ForeignKey, UniqueConstraint, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
 from typing import Optional # Added Optional
 
@@ -15,8 +15,8 @@ class AuditLogDetail(Base, TimestampMixin):
         UniqueConstraint('audit_log_id', 'detail_key', name='_audit_detail_uc'),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 감사 로그 상세 정보의 고유 ID
-    audit_log_id: Mapped[int] = mapped_column(Integer, ForeignKey("audit_logs.id"), nullable=False) # 관련 감사 로그의 ID
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 감사 로그 상세 정보의 고유 ID
+    audit_log_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("audit_logs.id"), nullable=False) # 관련 감사 로그의 ID
     detail_key: Mapped[str] = mapped_column(String(100), nullable=False) # 상세 정보의 키 (예: 'changed_field', 'old_value', 'new_value')
     detail_value: Mapped[str] = mapped_column(Text, nullable=False) # 상세 정보의 값 (Text로 저장, 타입에 따라 캐스팅)
     detail_value_type: Mapped[str] = mapped_column(Enum('STRING', 'INTEGER', 'FLOAT', 'BOOLEAN', 'ENUM', 'JSON', name='detail_value_type', create_type=False), nullable=False, default='STRING') # 상세 정보 값의 예상 타입

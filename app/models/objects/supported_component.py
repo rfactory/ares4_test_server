@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, BigInteger, String, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin
@@ -11,7 +11,7 @@ class SupportedComponent(Base, TimestampMixin):
     """
     __tablename__ = "supported_components"
 
-    id = Column(Integer, primary_key=True, index=True) # 지원되는 컴포넌트의 고유 ID
+    id = Column(BigInteger, primary_key=True, index=True) # 지원되는 컴포넌트의 고유 ID
     component_type = Column(String(255), unique=True, nullable=False, index=True) # 컴포넌트의 고유 식별자 (예: 'DHT11_Temperature_Sensor')
     display_name = Column(String(255), nullable=False) # 사용자에게 표시될 컴포넌트 이름 (예: 'DHT11 온도 센서')
     category = Column(String(50), nullable=False) # 컴포넌트의 분류 (예: '센서', '액추에이터', '통신 모듈')

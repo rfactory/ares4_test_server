@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, Enum
+from sqlalchemy import Column, BigInteger, String, Text, JSON, Enum, Integer # Integer (for counts/days)
 from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
 from typing import Optional # Added Optional
 
@@ -12,7 +12,7 @@ class InternalAssetDefinition(Base, TimestampMixin):
     """
     __tablename__ = "internal_asset_definitions"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 내부 자산 정의의 고유 ID
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 내부 자산 정의의 고유 ID
     
     # --- 자산 종류 구분 ---
     asset_class: Mapped[str] = mapped_column(Enum('HARDWARE_COMPONENT', 'PERISHABLE_GOOD', name='asset_class', create_type=False), nullable=False) # 자산의 분류 (예: 'HARDWARE_COMPONENT', 'PERISHABLE_GOOD')
@@ -37,5 +37,5 @@ class InternalAssetDefinition(Base, TimestampMixin):
     inventory_items = relationship("InternalAssetInventory", back_populates="asset_definition") # 이 자산 정의에 해당하는 재고 품목 목록
     purchase_records = relationship("InternalAssetPurchaseRecord", back_populates="asset_definition") # 이 자산 정의에 대한 구매 기록 목록
     blueprint_components = relationship("InternalBlueprintComponent", back_populates="asset_definition") # 이 자산 정의가 사용되는 블루프린트 컴포넌트 목록
-    replacement_events = relationship("InternalComponentReplacementEvent", back_populates="replaced_asset_definition") # 이 자산 정의가 교체된 컴포넌트 교체 이벤트 목록
+    # InternalComponentReplacementEvent가 UnitActivityLog로 통합되었으므로 관계 제거
     user_consumables = relationship("UserConsumable", back_populates="asset_definition") # 이 자산 정의에 해당하는 사용자 소모품 목록

@@ -1,5 +1,5 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Header, Path, HTTPException, status, Body
+from typing import List, Optional, Tuple
+from fastapi import APIRouter, Depends, Header, Path, HTTPException, status, Body, Query
 from sqlalchemy.orm import Session
 
 # 애플리케이션 핵심 종속성 임포트
@@ -8,39 +8,51 @@ from app.dependencies import get_db, get_current_user, PermissionChecker
 from app.core.exceptions import PermissionDeniedError, NotFoundError, DuplicateEntryError, ForbiddenError, ConflictError
 
 # 역할(Role) 관리 관련 스키마 및 프로바이더 임포트
-# - role_query: 역할을 조회할 때 사용되는 응답 스키마
-# - role_command: 역할을 생성, 수정할 때 사용되는 요청 스키마
-# - role_query_provider: 역할 조회 비즈니스 로직을 캡슐화한 프로바이더
-# - role_command_provider: 역할 생성, 수정, 삭제 비즈니스 로직을 캡슐화한 프로바이더
 from app.domains.inter_domain.role_management.schemas.role_query import RoleResponse, RolePermissionResponse
 from app.domains.inter_domain.role_management.schemas.role_command import RolePermissionUpdateRequest, RoleCreate, RoleUpdate
 from app.domains.inter_domain.role_management.role_query_provider import role_query_provider
 from app.domains.inter_domain.role_management.role_command_provider import role_command_provider
 
-# 역할 권한 업데이트 시 적용되는 정책 프로바이더 임포트
-# - 이 정책은 UI를 통한 중요 역할(예: SUPER_ADMIN) 수정 방지, 권한 상속 규칙 준수 등 핵심 안전 장치 로직을 담당
+# 정책 프로바이더 임포트
 from app.domains.inter_domain.policies.role_management.update_role_permissions_policy_provider import update_role_permissions_policy_provider
 from app.domains.inter_domain.policies.role_management.create_role_policy_provider import create_role_policy_provider
-from app.domains.inter_domain.policies.role_management.delete_role_policy_provider import delete_role_policy_provider # 삭제 정책 추가
-from app.domains.inter_domain.policies.role_management.update_role_policy_provider import update_role_policy_provider # 수정 정책 추가
+from app.domains.inter_domain.policies.role_management.delete_role_policy_provider import delete_role_policy_provider
+from app.domains.inter_domain.policies.role_management.update_role_policy_provider import update_role_policy_provider
+from app.domains.inter_domain.policies.role_management.get_assignable_roles_policy_provider import get_assignable_roles_policy_provider # 신규 Policy Provider
 
-# SQLAlchemy ORM 모델 임포트: 타입 힌팅 및 종속성 주입에 사용
+# SQLAlchemy ORM 모델 임포트
 from app.models.objects.user import User
 
 # FastAPI 라우터 인스턴스 생성
 router = APIRouter()
 
 
+@router.get("/assignable", response_model=List[RoleResponse])
+async def get_assignable_roles(
+    db: Session = Depends(get_db),
+    user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user),
+    organization_id: Optional[int] = Query(None, description="The context organization ID"),
+    _permission: None = Depends(PermissionChecker("role:read")) # 역할 읽기 권한이 있는 사용자만 접근 가능
+) -> List[RoleResponse]:
+    """
+    현재 사용자가 주어진 컨텍스트에서 할당할 수 있는 역할 목록을 조회합니다.
+    """
+    current_user, _, _ = user_info
+    roles = get_assignable_roles_policy_provider.execute(
+        db, actor_user=current_user, organization_id=organization_id
+    )
+    return roles
+
 # --- 역할 생성 API ---
 @router.post(
-    "/",
+    "",
     response_model=RoleResponse, # 성공 시 반환될 데이터 모델
     status_code=status.HTTP_201_CREATED, # 성공 시 HTTP 201 상태 코드 반환
     dependencies=[Depends(PermissionChecker("role:create"))] # 'role:create' 권한이 있는 사용자만 접근 가능
 )
-def create_role(
+async def create_role(
     db: Session = Depends(get_db), # 데이터베이스 세션 종속성 주입
-    current_user: User = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
+    user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
     role_in: RoleCreate = Body(...), # 요청 본문으로부터 RoleCreate 스키마 데이터 파싱
     x_organization_id: Optional[int] = Header(None, alias="X-Organization-ID") # HTTP 헤더에서 조직 ID 추출
 ) -> RoleResponse:
@@ -54,6 +66,7 @@ def create_role(
         - `DuplicateEntryError` (409 Conflict): 이미 동일한 이름의 역할이 존재하는 경우.
         - `HTTPException` (500 Internal Server Error): 예상치 못한 서버 오류 발생 시.
     """
+    current_user, _, _ = user_info
     try:
         create_role_policy_provider.execute(
             db,
@@ -78,13 +91,13 @@ def create_role(
 
 # --- 역할 목록 조회 API ---
 @router.get(
-    "/",
+    "",
     response_model=List[RoleResponse], # 성공 시 반환될 데이터 모델 목록
     dependencies=[Depends(PermissionChecker("role:read"))] # 'role:read' 권한이 있는 사용자만 접근 가능
 )
-def get_roles(
+async def get_roles(
     db: Session = Depends(get_db), # 데이터베이스 세션 종속성 주입
-    current_user: User = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
+    user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
     x_organization_id: Optional[int] = Header(None, alias="X-Organization-ID") # HTTP 헤더에서 조직 ID 추출
 ) -> List[RoleResponse]:
     """
@@ -94,6 +107,7 @@ def get_roles(
     - **헤더:** `X-Organization-ID` 헤더를 통해 조직 컨텍스트를 지정할 수 있습니다.
     - **응답:** `RoleResponse` 스키마 목록을 반환합니다.
     """
+    current_user, _, _ = user_info
     # 역할 조회 비즈니스 로직을 담당하는 프로바이더 호출
     roles = role_query_provider.get_accessible_roles(
         db,
@@ -109,9 +123,9 @@ def get_roles(
     response_model=RoleResponse, # 성공 시 반환될 데이터 모델
     dependencies=[Depends(PermissionChecker("role:update"))] # 'role:update' 권한이 있는 사용자만 접근 가능
 )
-def update_role(
+async def update_role(
     db: Session = Depends(get_db), # 데이터베이스 세션 종속성 주입
-    current_user: User = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
+    user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
     role_id: int = Path(..., title="The ID of the role to update"), # 경로 파라미터에서 역할 ID 추출
     role_in: RoleUpdate = Body(...) # 요청 본문으로부터 RoleUpdate 스키마 데이터 파싱
 ) -> RoleResponse:
@@ -127,6 +141,7 @@ def update_role(
         - `DuplicateEntryError` (409 Conflict): 변경하려는 이름이 이미 존재하는 경우.
         - `HTTPException` (500 Internal Server Error): 예상치 못한 서버 오류 발생 시.
     """
+    current_user, _, _ = user_info
     try:
         update_role_policy_provider.execute(db=db, actor_user=current_user, role_id=role_id, role_in=role_in)
         updated_role = role_command_provider.update_role(db, role_id=role_id, role_in=role_in, actor_user=current_user)
@@ -150,9 +165,9 @@ def update_role(
     status_code=status.HTTP_204_NO_CONTENT, # 성공 시 HTTP 204 상태 코드 반환 (본문 없음)
     dependencies=[Depends(PermissionChecker("role:delete"))] # 'role:delete' 권한이 있는 사용자만 접근 가능
 )
-def delete_role(
+async def delete_role(
     db: Session = Depends(get_db), # 데이터베이스 세션 종속성 주입
-    current_user: User = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
+    user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
     role_id: int = Path(..., title="The ID of the role to delete") # 경로 파라미터에서 역할 ID 추출
 ):
     """
@@ -165,6 +180,7 @@ def delete_role(
         - `NotFoundError` (404 Not Found): 지정된 `role_id`를 가진 역할을 찾을 수 없는 경우.
         - `HTTPException` (500 Internal Server Error): 예상치 못한 서버 오류 발생 시.
     """
+    current_user, _, _ = user_info
     try:
         delete_role_policy_provider.execute(db, actor_user=current_user, role_id=role_id)
 
@@ -187,8 +203,9 @@ def delete_role(
     response_model=List[RolePermissionResponse], # 성공 시 반환될 데이터 모델 목록
     dependencies=[Depends(PermissionChecker("role:read"))] # 'role:read' 권한이 있는 사용자만 접근 가능
 )
-def get_role_permissions(
+async def get_role_permissions(
     db: Session = Depends(get_db), # 데이터베이스 세션 종속성 주입
+    user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
     role_id: int = Path(..., title="The ID of the role to get permissions for") # 경로 파라미터에서 역할 ID 추출
 ) -> List[RolePermissionResponse]:
     """
@@ -198,6 +215,7 @@ def get_role_permissions(
     - **경로 파라미터:** `role_id` (권한을 조회할 역할의 고유 ID).
     - **응답:** `RolePermissionResponse` 스키마 목록을 반환합니다.
     """
+    current_user, _, _ = user_info
     # 역할 권한 조회 비즈니스 로직을 담당하는 프로바이더 호출
     permissions = role_query_provider.get_permissions_for_role(db, role_id=role_id)
     return permissions
@@ -209,9 +227,9 @@ def get_role_permissions(
     status_code=status.HTTP_204_NO_CONTENT, # 성공 시 HTTP 204 상태 코드 반환 (본문 없음)
     dependencies=[Depends(PermissionChecker("role:update"))] # 'role:update' 권한이 있는 사용자만 접근 가능
 )
-def update_role_permissions(
+async def update_role_permissions(
     db: Session = Depends(get_db), # 데이터베이스 세션 종속성 주입
-    current_user: User = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
+    user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user), # 현재 로그인한 사용자 정보 주입
     role_id: int = Path(..., title="The ID of the role to update permissions for"), # 경로 파라미터에서 역할 ID 추출
     update_data: RolePermissionUpdateRequest = Body(...), # 요청 본문으로부터 RolePermissionUpdateRequest 스키마 데이터 파싱
     x_organization_id: Optional[int] = Header(None, alias="X-Organization-ID") # HTTP 헤더에서 조직 ID 추출
@@ -230,6 +248,7 @@ def update_role_permissions(
         - `PermissionDeniedError` (403 Forbidden): 정책(Policy)에 정의된 안전 장치 규칙(예: 상위 역할 수정 금지, 자신이 가지지 않은 권한 부여 시도 등) 위반 시.
         - `HTTPException` (500 Internal Server Error): 예상치 못한 서버 오류 발생 시.
     """
+    current_user, _, _ = user_info
     try:
         # 정책 프로바이더를 통해 역할 권한 업데이트에 대한 모든 비즈니스 규칙 및 안전 장치 로직 실행
         update_role_permissions_policy_provider.execute(

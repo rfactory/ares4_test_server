@@ -20,18 +20,37 @@ from app.domains.services.governance.schemas.governance_rule import GovernanceRu
 
 # 시스템에 필수적인 기본 권한들 정의
 ESSENTIAL_PERMISSIONS = {
-    "organization:create": "Create a new organization",
-    "organizations:read": "Read the list of organizations",
-    "organization_type:create": "Create a new organization type",
-    "role:read": "Read role definitions",
-    "role:update": "Update role definitions",
-    "role:create": "Create a new role", # System_Admin 전용
-    "role:delete": "Delete an existing role", # System_Admin 전용
-    "role:assign_system": "Assign a system-level role to a user",
-    "role:assign_organization": "Assign an organization-level role to a user",
-    "permission:read": "Read permission definitions",
-    "system:context_switch": "Allows switching to an organization context from the system context.",
+    # Organization Management
+    "organization:create": {"description": "Create a new organization", "ui_group": "Organization"},
+    "organizations:read": {"description": "Read the list of organizations", "ui_group": "Organization"},
+    "organization_type:create": {"description": "Create a new organization type", "ui_group": "Organization"},
+    
+    # Role Management
+    "role:read": {"description": "Read role definitions", "ui_group": "Role Management"},
+    "role:update": {"description": "Update role definitions", "ui_group": "Role Management"},
+    "role:create": {"description": "Create a new role", "ui_group": "Role Management"},
+    "role:delete": {"description": "Delete an existing role", "ui_group": "Role Management"},
+    
+    # Member Management
+    "role:assign_system": {"description": "Assign a system-level role to a user", "ui_group": "Members"},
+    "role:assign_organization": {"description": "Assign an organization-level role to a user", "ui_group": "Members"},
+    "organization_members:read": {"description": "Read the list of members in an organization", "ui_group": "Members"},
+    "system_members:read": {"description": "Read the list of system-level staff", "ui_group": "Members"},
+    
+    # Access Control
+    "permission:read": {"description": "Read permission definitions", "ui_group": "Access Control"},
+    "access-request:read": {"description": "Read access requests", "ui_group": "Access Control"},
+    
+    # System
+    "system:context_switch": {"description": "Allows switching to an organization context from the system context.", "ui_group": "System"},
 }
+
+# 시스템에서 잠글 최상위 권한 목록
+SYSTEM_LOCKED_PERMISSIONS = [
+    "role:create",
+    "role:delete",
+    "permission:read",
+]
 
 # T0 역할 최대 인원 수 정의
 MAX_PRIME_ADMIN = 3
@@ -57,12 +76,26 @@ async def create_initial_data():
         # 2. 필수 권한 시딩
         print("Seeding essential permissions...")
         permission_objects = {}
-        for name, desc in ESSENTIAL_PERMISSIONS.items():
+        for name, details in ESSENTIAL_PERMISSIONS.items():
+            is_locked = name in SYSTEM_LOCKED_PERMISSIONS
             perm = db.query(Permission).filter(Permission.name == name).first()
             if not perm:
                 print(f"Creating permission: '{name}'...")
-                perm = Permission(name=name, description=desc)
+                perm = Permission(
+                    name=name, 
+                    description=details["description"], 
+                    ui_group=details["ui_group"],
+                    is_system_locked=is_locked
+                )
                 db.add(perm)
+            else:
+                if perm.is_system_locked != is_locked:
+                    print(f"Updating is_system_locked for permission '{name}'...")
+                    perm.is_system_locked = is_locked
+                if perm.ui_group != details["ui_group"]:
+                    print(f"Updating ui_group for permission '{name}'...")
+                    perm.ui_group = details["ui_group"]
+
             permission_objects[name] = perm
         db.commit()
         print("Permission seeding complete.")

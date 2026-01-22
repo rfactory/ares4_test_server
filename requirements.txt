@@ -21,6 +21,7 @@ fastapi-mail
 passlib
 python-jose[cryptography]
 bcrypt==3.2.0
+PyJWT # DPoP 구현을 위해 추가
 
 # Vault
 hvac

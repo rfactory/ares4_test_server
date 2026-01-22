@@ -30,9 +30,10 @@ class InvitationPreconditionValidator:
         if invitation_in.organization_id and not db_organization:
             raise NotFoundError("Organization", str(invitation_in.organization_id))
 
+        # 사용자가 해당 컨텍스트에 이미 어떤 역할이든 가지고 있는지 확인합니다.
         for assignment in existing_assignments:
-            if assignment.role_id == invitation_in.role_id and assignment.organization_id == invitation_in.organization_id:
-                raise AppLogicError("User already has this role in the specified context.")
+            if assignment.organization_id == invitation_in.organization_id:
+                raise AppLogicError("User already has a role in the specified context. Please update the existing role instead of inviting.")
 
         if existing_pending_request:
             raise AppLogicError("A pending invitation or request for this user and role already exists.")

@@ -17,8 +17,8 @@ class DispatchCommandRequest(BaseModel):
     # actor_user_id: Optional[int] # 내부 API이므로, actor를 어떻게 처리할지 정의 필요
 
 @router.post("/dispatch-command", status_code=202)
-def dispatch_command(
-    *, 
+async def dispatch_command(
+    *,
     request_body: DispatchCommandRequest,
     db: Session = Depends(get_db),
     # internal_api_key: str = Depends(deps.get_internal_api_key) # 내부용 API Key 인증 추가 가능
@@ -30,7 +30,7 @@ def dispatch_command(
     logger.info(
         f"Internal API: Received request to dispatch command to topic: {request_body.topic}"
     )
-    
+
     # 내부 API 호출의 경우 actor를 어떻게 정의할지 결정해야 합니다.
     # 여기서는 시스템 사용자(ID 1)를 사용하거나, 요청에 명시된 ID를 사용할 수 있습니다.
     # 우선은 시스템 사용자로 가정합니다.
@@ -39,10 +39,10 @@ def dispatch_command(
         logger.warning("System user (ID 1) not found for internal API audit log.")
 
     command_dispatch_provider.publish_command(
-        db=db, 
-        topic=request_body.topic, 
-        command=request_body.command, 
+        db=db,
+        topic=request_body.topic,
+        command=request_body.command,
         actor_user=system_user
     )
-    
+
     return {"message": "Command dispatch accepted."}

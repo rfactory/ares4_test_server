@@ -11,6 +11,10 @@ from app.core.exceptions import DuplicateEntryError, NotFoundError
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class UserIdentityCommandService:
+    def get_password_hash(self, *, password: str) -> str:
+        """비밀번호를 해시하여 반환합니다."""
+        return get_password_hash(password)
+
     async def create_user_and_log(self, db: Session, *, user_in: UserCreate, created_by: Optional[DBUser] = None, is_active: bool = True) -> DBUser:
         """새로운 사용자를 생성하고 감사 로그를 기록합니다."""
         if user_identity_query_crud.get_by_username(db, username=user_in.username):

@@ -14,3 +14,14 @@ class UserUpdate(BaseModel):
     is_staff: Optional[bool] = None
     is_superuser: Optional[bool] = None
     is_two_factor_enabled: Optional[bool] = None
+
+class RoleIdRequest(BaseModel):
+    role_id: int
+
+class UserRoleAssignmentCreate(BaseModel):
+    user_id: int
+    role_id: int
+    organization_id: Optional[int] = None
+
+class UserRoleAssignmentUpdate(BaseModel):
+    role_id: int

@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import BigInteger, String, UniqueConstraint, Column # Column 추가
+from sqlalchemy.orm import relationship, Mapped, mapped_column # Mapped, mapped_column 추가
+from typing import Optional # Optional 추가
 from app.database import Base
 from ..base_model import TimestampMixin, UserFKMixin, DeviceFKMixin
 
@@ -13,11 +14,11 @@ class UserDevice(Base, TimestampMixin, UserFKMixin, DeviceFKMixin):
         UniqueConstraint('user_id', 'device_id', name='_user_device_uc'),
     )
 
-    id = Column(Integer, primary_key=True, index=True) # 사용자-장치 관계의 고유 ID
-    # user_id는 UserFKMixin으로부터 상속받습니다.
-    # device_id는 DeviceFKMixin으로부터 상속받습니다.
-    role = Column(String(20), default='owner', nullable=False) # 사용자-장치 관계에서의 역할 (예: 'owner', 'viewer')
-    nickname = Column(String(100), nullable=True) # 장치에 대한 사용자 지정 별명
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 사용자-장치 관계의 고유 ID
+    # user_id는 UserFKMixin으로부터 상속받습니다. (BigInteger)
+    # device_id는 DeviceFKMixin으로부터 상속받습니다. (BigInteger)
+    role: Mapped[str] = mapped_column(String(20), default='owner', nullable=False) # 사용자-장치 관계에서의 역할 (예: 'owner', 'viewer')
+    nickname: Mapped[Optional[str]] = mapped_column(String(100), nullable=True) # 장치에 대한 사용자 지정 별명
     
     # --- Relationships ---
     user = relationship("User", back_populates="devices") # 이 관계에 연결된 사용자 정보

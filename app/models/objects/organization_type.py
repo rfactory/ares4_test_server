@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, BigInteger, String
 from sqlalchemy.orm import relationship
 from app.database import Base
 from ..base_model import TimestampMixin
@@ -10,7 +10,7 @@ class OrganizationType(Base, TimestampMixin):
     """
     __tablename__ = "organization_types"
 
-    id = Column(Integer, primary_key=True, index=True) # 조직 유형의 고유 ID
+    id = Column(BigInteger, primary_key=True, index=True) # 조직 유형의 고유 ID
     name = Column(String(50), unique=True, nullable=False) # 조직 유형의 이름 (예: '기업', '정부기관')
     description = Column(String(255), nullable=True) # 조직 유형에 대한 설명
     

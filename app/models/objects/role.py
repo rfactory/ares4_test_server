@@ -1,8 +1,15 @@
-from sqlalchemy import Column, Integer, String, Text, UniqueConstraint, Enum
+from sqlalchemy import Column, BigInteger, String, Text, UniqueConstraint, Enum, Integer # Integer 추가
 from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING # TYPE_CHECKING, List 추가
 from app.database import Base
 from ..base_model import TimestampMixin, OrganizationFKMixin # OrganizationFKMixin 추가
+
+# 런타임 순환 참조 방지 및 타입 힌트 지원
+if TYPE_CHECKING:
+    from app.models.objects.organization import Organization
+    from app.models.relationships.role_permission import RolePermission
+    from app.models.relationships.user_organization_role import UserOrganizationRole
+    from app.models.objects.access_request import AccessRequest
 
 class Role(Base, TimestampMixin, OrganizationFKMixin): # OrganizationFKMixin 상속
     """
@@ -14,7 +21,7 @@ class Role(Base, TimestampMixin, OrganizationFKMixin): # OrganizationFKMixin 상
         UniqueConstraint('organization_id', 'name', name='_organization_role_name_uc'),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True) # 역할의 고유 ID
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 역할의 고유 ID
     name: Mapped[str] = mapped_column(String(50), nullable=False, index=True) # 역할의 이름 (예: '관리자', '사용자')
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 역할에 대한 설명
     scope: Mapped[str] = mapped_column(Enum('SYSTEM', 'ORGANIZATION', name='role_scope', create_type=False), default='ORGANIZATION', nullable=False) # 역할의 적용 범위 ('SYSTEM' 또는 'ORGANIZATION')
@@ -27,7 +34,7 @@ class Role(Base, TimestampMixin, OrganizationFKMixin): # OrganizationFKMixin 상
     # organization_id는 OrganizationFKMixin으로부터 상속받습니다.
     
     # --- Relationships ---
-    permissions = relationship("RolePermission", back_populates="role") # 이 역할에 부여된 권한 목록
-    organization = relationship("Organization", back_populates="roles") # 이 역할이 속한 조직 정보 (SYSTEM 역할의 경우 Null)
-    users = relationship("UserOrganizationRole", back_populates="role") # 이 역할을 가진 사용자-조직 관계 목록
-    access_requests = relationship("AccessRequest", back_populates="requested_role") # 이 역할로의 접근을 요청하는 기록 목록
+    permissions: Mapped[List["RolePermission"]] = relationship("RolePermission", back_populates="role") # 이 역할에 부여된 권한 목록
+    organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="roles") # 이 역할이 속한 조직 정보 (SYSTEM 역할의 경우 Null)
+    users: Mapped[List["UserOrganizationRole"]] = relationship("UserOrganizationRole", back_populates="role") # 이 역할을 가진 사용자-조직 관계 목록
+    access_requests: Mapped[List["AccessRequest"]] = relationship("AccessRequest", back_populates="requested_role") # 이 역할로의 접근을 요청하는 기록 목록

@@ -6,8 +6,8 @@ from app.models.objects.role import Role
 from app.models.objects.user import User
 from ..crud.role_command_crud import role_command_crud
 from ..crud.role_query_crud import role_query_crud
-from ..crud.role_permission_command_crud import role_permission_command_crud # 추가
-from ..schemas.role_command import RoleCreate, RoleUpdate, RolePermissionUpdateRequest, PermissionAssignment # 추가
+from ..crud.role_permission_command_crud import role_permission_command_crud
+from ..schemas.role_command import RoleCreate, RoleUpdate, RolePermissionUpdateRequest, PermissionAssignment
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class RoleCommandService:
@@ -65,8 +65,6 @@ class RoleCommandService:
 
     def update_permissions_for_role(self, db: Session, *, role_id: int, permissions_in: List[PermissionAssignment], actor_user: User):
         """역할에 할당된 권한 목록 전체를 업데이트합니다."""
-        # TODO: actor_user가 이 role_id를 수정할 권한이 있는지 확인하는 로직 (API 계층에서)
-
         # 1. 기존 권한 할당을 모두 삭제
         role_permission_command_crud.remove_by_role_id(db, role_id=role_id)
 
@@ -82,3 +80,4 @@ class RoleCommandService:
         )
 
 role_command_service = RoleCommandService()
+

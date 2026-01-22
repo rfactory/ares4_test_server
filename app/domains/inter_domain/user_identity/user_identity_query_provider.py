@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import List, Optional
 
 from app.domains.services.user_identity.services.user_identity_query_service import user_identity_query_service
 from .schemas.models import User # Re-export for inter-domain usage
@@ -16,5 +16,13 @@ class UserIdentityQueryProvider:
 
     def get_user(self, db: Session, user_id: int) -> Optional[User]:
         return user_identity_query_service.get_user(db, user_id=user_id)
+
+    def get_members_by_organization(self, db: Session, *, organization_id: int) -> List[dict]:
+        return user_identity_query_service.get_members_by_organization(
+            db, organization_id=organization_id
+        )
+
+    def get_members_by_system(self, db: Session) -> List[dict]:
+        return user_identity_query_service.get_members_by_system(db)
 
 user_identity_query_provider = UserIdentityQueryProvider()

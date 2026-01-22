@@ -56,7 +56,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Ares4 Server v2",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 # ForbiddenError 예외 처리기
@@ -89,6 +90,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["DPoP-Nonce", "dpop-nonce"], # 대소문자 모두 노출
 )
 
 app.include_router(api_router, prefix="/api/v1")

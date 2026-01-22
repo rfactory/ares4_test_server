@@ -2,8 +2,8 @@ from typing import Any, Dict, Optional, List
 
 from app.models.objects.user import User
 from app.models.objects.role import Role
-from app.core.redis_client import get_redis_client # 수정된 임포트
-from app.core.exceptions import ForbiddenError # ForbiddenError 임포트
+from app.core.redis_client import get_redis_client
+from app.core.exceptions import ForbiddenError
 
 class GovernanceValidator:
     def _check_conditions(
@@ -73,7 +73,7 @@ class GovernanceValidator:
         **kwargs
     ) -> None:
         """전달된 규칙 목록을 평가하여 허용 여부를 결정하고, 실패 시 에러를 발생시킵니다."""
-        actor_roles: List[Role] = [assignment.role for assignment in actor_user.user_role_assignments]
+        actor_roles: List[Role] = [assignment.role for assignment in actor_user.user_role_assignments if assignment.role]
         
         allow_action = False
 

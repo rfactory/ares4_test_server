@@ -11,4 +11,10 @@ class PermissionValidatorProvider:
             db=db, user=user, permission_name=permission_name, organization_id=organization_id
         )
 
+    def validate_for_role_assignment(self, db: Session, *, user: User, organization_id: Optional[int] = None) -> None:
+        """역할 할당 시나리오에 대한 권한 검증을 위임합니다."""
+        permission_validator.validate_for_role_assignment(
+            db=db, user=user, organization_id=organization_id
+        )
+
 permission_validator_provider = PermissionValidatorProvider()

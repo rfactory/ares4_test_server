@@ -21,4 +21,9 @@ class RoleCommandProvider:
             db, role_id=role_id, permissions_in=permissions_in, actor_user=actor_user
         )
 
+    def remove_member_from_organization(self, db: Session, *, organization_id: int, user_id: int, actor_user: User):
+        return role_command_service.remove_member_from_organization(
+            db, organization_id=organization_id, user_id=user_id, actor_user=actor_user
+        )
+
 role_command_provider = RoleCommandProvider()

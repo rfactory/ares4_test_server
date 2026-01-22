@@ -10,7 +10,7 @@ class OrganizationQueryService:
     """
     조직(Organization) 정보 및 관련 객체에 대한 조회 'Query' 성격의 비즈니스 로직을 담당합니다.
     """
-    def get_organization(self, db: Session, org_id: int) -> Optional[OrganizationResponse]:
+    def get_organization_by_id(self, db: Session, org_id: int) -> Optional[OrganizationResponse]:
         """ID로 특정 조직 정보를 조회합니다."""
         db_obj = organization_crud_query.get(db, id=org_id)
         return OrganizationResponse.model_validate(db_obj) if db_obj else None

@@ -34,15 +34,13 @@ class CreateInvitationPolicy:
         """
         관리자가 사용자를 역할로 초대(push)하는 워크플로우를 관장합니다.
         """
-        # 1. 권한 검증 및 필요한 데이터 조회 (Policy의 Orchestration 역할)
+        # 1. 권한 검증
+        permission_validator_provider.validate_for_role_assignment(db, user=actor_user, organization_id=invitation_in.organization_id)
+
+        # 2. 데이터 조회
         db_organization = None
-        if invitation_in.organization_id is None:
-            required_permission = "role:assign_system"
-            permission_validator_provider.validate(db, user=actor_user, permission_name=required_permission)
-        else:
-            required_permission = "role:assign_organization"
+        if invitation_in.organization_id:
             db_organization = organization_query_provider.get_organization(db, organization_id=invitation_in.organization_id)
-            permission_validator_provider.validate(db, user=actor_user, permission_name=required_permission, organization_id=invitation_in.organization_id)
 
         # 2. 데이터 조회
         db_user_to_invite = user_identity_query_provider.get_user_by_email(db, email=invitation_in.email_to_invite)

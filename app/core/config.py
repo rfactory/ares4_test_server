@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -16,9 +16,10 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
 
     # --- JWT Settings ---
-    JWT_SECRET_KEY: str
+    JWT_SECRET_KEYS: str # List[str]에서 str으로 다시 변경
     JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 5 # 5분으로 변경
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 14 # 14일로 설정
 
     # --- MQTT Settings ---
     MQTT_BROKER_HOST: str
@@ -63,7 +64,7 @@ class Settings(BaseSettings):
     # --- Invitation Settings ---
     INVITATION_EXPIRATION_HOURS: int = 24
 
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8', extra='ignore', secrets_dir='/run/secrets') # env_file 추가
 
 @lru_cache
 def get_settings() -> Settings:

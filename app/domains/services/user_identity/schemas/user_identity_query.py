@@ -28,3 +28,13 @@ class Token(BaseModel):
 class UserWithToken(BaseModel):
     user: User
     token: Token
+
+# --- Member-related Schemas ---
+class MemberResponse(BaseModel):
+    """조직 구성원 정보를 반환하기 위한 스키마입니다."""
+    id: int
+    username: str
+    email: EmailStr
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)

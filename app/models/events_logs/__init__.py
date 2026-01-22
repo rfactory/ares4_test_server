@@ -1,6 +1,5 @@
 from .alert_event import AlertEvent
 from .audit_log import AuditLog
-from .consumable_replacement_event import ConsumableReplacementEvent
 from .consumable_usage_log import ConsumableUsageLog
 from .device_log import DeviceLog
 from .firmware_update import FirmwareUpdate
@@ -8,13 +7,11 @@ from .telemetry_data import TelemetryData
 from .user_consumable import UserConsumable
 from .telemetry_metadata import TelemetryMetadata
 from .audit_log_detail import AuditLogDetail
-from .production_event import ProductionEvent
-from .image_analysis import ImageAnalysis
+from .unit_activity_log import UnitActivityLog # UnitActivityLog 추가
 
 __all__ = [
     "AlertEvent",
     "AuditLog",
-    "ConsumableReplacementEvent",
     "ConsumableUsageLog",
     "DeviceLog",
     "FirmwareUpdate",
@@ -22,6 +19,5 @@ __all__ = [
     "UserConsumable",
     "TelemetryMetadata",
     "AuditLogDetail",
-    "ProductionEvent",
-    "ImageAnalysis",
+    "UnitActivityLog", # UnitActivityLog 추가
 ]
