@@ -3,7 +3,6 @@ import json
 import paho.mqtt.client as mqtt
 import ssl
 import time
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -16,6 +15,7 @@ class MqttPersistentPublisher:
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             protocol=mqtt.MQTTv311
         )
+
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self._connected = False
@@ -32,6 +32,7 @@ class MqttPersistentPublisher:
     def _on_disconnect(self, client, userdata, flags, reason_code, properties):
         logger.warning(f"MQTT Publisher: Disconnected from Broker. Reason: {reason_code}")
         self._connected = False
+        
         if reason_code != 0:
             logger.warning("MQTT Publisher: Unexpected disconnection occurred. Auto-reconnect will be attempted.")
 
@@ -45,14 +46,16 @@ class MqttPersistentPublisher:
                     keyfile=settings.MQTT_CLIENT_KEY,
                     tls_version=ssl.PROTOCOL_TLSv1_2
                 )
+                
                 if settings.MQTT_TLS_INSECURE:
                     logger.warning("MQTT Publisher: TLS insecure mode is enabled. Skipping hostname verification.")
                     self.client.tls_insecure_set(True)
-            
+
             self.client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
             self.client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT, settings.MQTT_KEEPALIVE)
             self.client.loop_start() # Start a background thread to handle MQTT network traffic
             logger.info(f"MQTT Publisher: Attempting to connect to {settings.MQTT_BROKER_HOST}:{settings.MQTT_BROKER_PORT}")
+
         except Exception as e:
             logger.error(f"MQTT Publisher: An error occurred while connecting: {e}")
 
@@ -66,12 +69,13 @@ class MqttPersistentPublisher:
             if not self._connected:
                 logger.error("MQTT Publisher: Still not connected. Cannot publish message.")
                 return False
-        
+
         try:
             payload_str = payload if isinstance(payload, str) else json.dumps(payload)
             result = self.client.publish(topic, payload_str, qos=1)
             logger.debug(f"MQTT Publisher: Queued message for topic {topic}: {payload_str}. Result: {result}")
             return True
+
         except Exception as e:
             logger.error(f"MQTT Publisher: An error occurred while publishing: {e}", exc_info=True)
             return False

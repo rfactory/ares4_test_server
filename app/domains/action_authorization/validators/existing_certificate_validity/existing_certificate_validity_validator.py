@@ -1,7 +1,6 @@
 import logging
 from typing import Tuple, Optional, Dict
-from datetime import datetime, timedelta
-
+from datetime import datetime, timezone, timedelta
 from app.core.config import Settings
 from app.domains.services.certificate_management.schemas import IssuedCertificateRead
 
@@ -15,17 +14,14 @@ class ExistingCertificateValidityValidator:
     """
     def __init__(self, settings: Settings):
         self.settings = settings
-        # 예: 만료 임박 기준 시간 (설정에서 가져올 값)
-        # self.EXPIRY_THRESHOLD = timedelta(hours=settings.CERT_EXPIRY_THRESHOLD_HOURS)
-        self.EXPIRY_THRESHOLD = timedelta(hours=1) # 임시값
-
+        
     def validate(self, certificate_data: Dict) -> Tuple[bool, Optional[str]]:
         """
         인증서 데이터의 만료 시각을 확인하여 유효성을 검증합니다.
 
         Args:
             certificate_data: IssuedCertificateRead 스키마에 해당하는 딕셔너리.
-                              'expiration' 키에 datetime 객체가 포함되어야 합니다.
+                            'expiration' 키에 datetime 객체가 포함되어야 합니다.
 
         Returns:
             (True, None) - 인증서가 충분히 유효할 경우
@@ -43,18 +39,24 @@ class ExistingCertificateValidityValidator:
         if not cert_info.expiration:
             return False, "Certificate expiration date is missing."
 
-        current_time = datetime.now(cert_info.expiration.tzinfo)
+        now = datetime.now(timezone.utc)
         
         # 만료되었는지 확인
-        if cert_info.expiration <= current_time:
+        if cert_info.expiration <= now:
             return False, "Certificate has expired."
         
-        # 만료가 임박했는지 확인
-        if cert_info.expiration - current_time < self.EXPIRY_THRESHOLD:
-            return False, f"Certificate is expiring soon (within {self.EXPURY_THRESHOLD.total_seconds() / 3600} hours)."
-            
+        # 동적 임계값 판단(전체 수명의 10% 또는 최소 12시간)
+        # Threshold = max(43200, total_ttl * 0.1)
+        total_ttl = (cert_info.expiration - cert_info.issued_at).total_seconds()
+        remaining = (cert_info.expiration - now).total_seconds()
+        
+        dynamic_threshold = max(12 * 3600, total_ttl * 0.1)
+        
+        if remaining < dynamic_threshold:
+            return False, f"Certificate is expiring soon (within {dynamic_threshold / 3600} hours)."
+        
         return True, None
-
+        
 # --- Singleton Instance ---
 app_settings = Settings()
 existing_certificate_validity_validator = ExistingCertificateValidityValidator(settings=app_settings)

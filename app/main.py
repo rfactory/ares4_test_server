@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 _mqtt_orchestrator: Optional[MqttLifecycleOrchestrator] = None
 _governance_task: Optional[asyncio.Task] = None
+# [추가] 백그라운드 태스크의 가비지 컬렉션을 방지하기 위한 강한 참조 저장소
+_background_tasks = set()
 
 async def _periodic_governance_check():
     """Periodically checks governance status, like emergency mode."""
@@ -34,25 +36,40 @@ async def _periodic_governance_check():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Application starting up...")
+    """서버의 시작과 종료 시 모든 핵심 인프라를 지휘합니다."""
+    logger.info("🚀Application starting up...")
     
-    global _mqtt_orchestrator, _governance_task
+    global _mqtt_orchestrator, _governance_task, _background_tasks
+    
+    # 1. MQTT Orchestrator 초기화 및 기동
+    # 내부적으로 인증서 획득, 연결 매니저 설정, 로테이션 감시 루프(Task)가 시작됩니다.
     _mqtt_orchestrator = MqttLifecycleOrchestrator(
         settings=get_settings(),
         db_session_factory=SessionLocal
     )
-    await _mqtt_orchestrator.startup()
+    # [수정] await 대신 create_task를 사용하고 세트에 보관하여 가비지 컬렉션을 방지합니다.
+    # 이렇게 하면 FastAPI가 즉시 yield로 넘어가서 EMQX의 인증 요청을 받을 준비를 마칩니다.
+    mqtt_startup_task = asyncio.create_task(_mqtt_orchestrator.startup())
+    _background_tasks.add(mqtt_startup_task)
+    mqtt_startup_task.add_done_callback(_background_tasks.discard)
 
-    # Start periodic governance check as a background task
+    # 2. 주기적 거버넌스 체크 백그라운드 태스크 시작
     _governance_task = asyncio.create_task(_periodic_governance_check())
+    
+    logger.info("✅ All background tasks and MQTT infrastructure are operational.")
+    yield # 서버가 요청을 처리하는 시점
 
-    yield
-
-    logger.info("Application shutting down...")
+    logger.info("🛑Application shutting down...")
+    
+    # 3. 자원 정리 (Graceful Shutdown)
     if _governance_task:
         _governance_task.cancel()
+        logger.info("Governance task cancelled.")
+        
     if _mqtt_orchestrator:
+        # shutdown 내에서 감시 루프 Task 취소 및 MQTT 연결 해제가 수행됩니다.
         await _mqtt_orchestrator.shutdown()
+        logger.info("MQTT Orchestrator shut down successfully.")
 
 app = FastAPI(
     title="Ares4 Server v2",
