@@ -1,28 +1,43 @@
 from sqlalchemy import BigInteger, JSON, UniqueConstraint
-from sqlalchemy.orm import relationship, Mapped, mapped_column # Mapped, mapped_column 추가
-from typing import Optional # Optional 추가 (JSON 때문에 필요할 수 있음)
+from sqlalchemy.ext.associationproxy import association_proxy, AssociationProxy
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import Optional, List, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, RoleFKMixin, PermissionFKMixin # Mixin 추가
+from ..base_model import TimestampMixin, RoleFKMixin, PermissionFKMixin
 
-class RolePermission(Base, TimestampMixin, RoleFKMixin, PermissionFKMixin): # Mixin 상속
+if TYPE_CHECKING:
+    from app.models.objects.role import Role
+    from app.models.objects.permission import Permission
+
+class RolePermission(Base, TimestampMixin, RoleFKMixin, PermissionFKMixin):
     """
-    역할-권한 관계 모델은 특정 역할이 어떤 권한을 가지는지 정의합니다.
-    이는 RBAC(Role-Based Access Control)의 핵심 부분으로,
-    역할에 따라 접근 가능한 데이터 컬럼이나 필터 조건을 지정할 수 있습니다.
+    [Relationship] 역할-권한 관계 모델:
+    특정 역할(Role)이 가진 권한(Permission)의 범위와 제약 조건을 정의합니다.
+    컬럼 레벨 보안(Column-level Security)과 행 레벨 필터링(Row-level Filtering)을 지원합니다.
     """
     __tablename__ = "role_permissions"
     __table_args__ = (
         UniqueConstraint('role_id', 'permission_id', name='_role_permission_uc'),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 역할-권한 관계의 고유 ID
-    allowed_columns: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # 이 권한이 허용하는 컬럼 목록 (JSON 형식)
-    filter_condition: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # 이 권한에 적용되는 데이터 필터 조건 (JSON 형식)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     
-    # --- 관계 정의 (외래 키) ---
-    # role_id는 RoleFKMixin으로부터 상속받습니다. (BigInteger)
-    # permission_id는 PermissionFKMixin으로부터 상속받습니다. (BigInteger)
+    # 1. 데이터 가시성 제어 (JSONB 권장)
+    # 예: {"include": ["id", "name", "status"], "exclude": ["internal_cost"]}
+    allowed_columns: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) 
+    
+    # 2. 데이터 필터링 조건 (JSONB 권장)
+    # 예: {"organization_id": "current_user_org_id", "status": "ACTIVE"}
+    filter_condition: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) 
     
     # --- Relationships ---
-    role = relationship("Role", back_populates="permissions") # 이 관계에 연결된 역할 정보
-    permission = relationship("Permission", back_populates="roles") # 이 관계에 연결된 권한 정보
+    role: Mapped["Role"] = relationship("Role", back_populates="permissions")
+    permission: Mapped["Permission"] = relationship("Permission", back_populates="roles")
+    
+    # --- Association Proxies (개발 편의성) ---
+    # rp.permission_name 만으로도 연결된 권한의 이름을 바로 가져올 수 있습니다.
+    permission_name: AssociationProxy[str] = association_proxy("permission", "name")
+    permission_description: AssociationProxy[str] = association_proxy("permission", "description")
+
+    def __repr__(self):
+        return f"<RolePermission(role_id={self.role_id}, permission={self.permission_name})>"

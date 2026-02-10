@@ -1,14 +1,27 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
+# [중요] DB 모델 import
+from app.models.objects.organization import Organization
 from app.domains.services.organizations.schemas.organization_query import OrganizationResponse, OrganizationTypeResponse
-from app.domains.services.organizations.services.organization_query_service import organization_query_service
+from app.domains.services.organizations.services.organization_query_service import organization_query_service, OrganizationQueryService
 
 class OrganizationQueryProvider:
     """
-    Organization Query 서비스에 대한 공개 인터페이스입니다。
+    Organization Query 서비스에 대한 공개 인터페이스입니다.
     """
-    def get_organization_by_id(self, db: Session, org_id: int) -> Optional[OrganizationResponse]:
+    def get_service(self) -> OrganizationQueryService:
+        return organization_query_service
+    
+    # [Internal Use] ORM 객체 반환 메서드 (Policy/Validator용)
+    def get_organization_by_id(self, db: Session, org_id: int) -> Optional[Organization]:
+        return organization_query_service.get_organizations_entry(db, org_id=org_id)
+
+    def get_organization_entry_by_registration_number(self, db: Session, registration_number: str) -> Optional[Organization]:
+        return organization_query_service.get_organization_entry_by_registration_number(db, registration_number=registration_number)
+
+    # [External Use] 스키마 반환 메서드 (API용)
+    def get_organization_schema(self, db: Session, org_id: int) -> Optional[OrganizationResponse]:
         return organization_query_service.get_organization_by_id(db, org_id=org_id)
 
     def get_organizations(self, db: Session, skip: int = 0, limit: int = 100) -> List[OrganizationResponse]:
@@ -30,5 +43,5 @@ class OrganizationQueryProvider:
 
     def get_organization_types(self, db: Session, skip: int = 0, limit: int = 100) -> List[OrganizationTypeResponse]:
         return organization_query_service.get_organization_types(db, skip=skip, limit=limit)
-
+    
 organization_query_provider = OrganizationQueryProvider()

@@ -10,6 +10,7 @@ from app.domains.inter_domain.validators.headcount.headcount_validator_provider 
 from app.domains.inter_domain.user_role_assignment.user_role_assignment_query_provider import user_role_assignment_query_provider
 from app.domains.inter_domain.governance.governance_command_provider import governance_command_provider
 from app.domains.inter_domain.role_management.role_query_provider import role_query_provider
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 # Import schemas from inter_domain
 from app.domains.inter_domain.user_role_assignment.schemas.user_role_assignment_command import UserRoleAssignmentCreate
@@ -62,8 +63,20 @@ class AcceptInvitationPolicy:
             update_in=update_in,
             admin_user=accepting_user
         )
-
-        # 6. 후속 조치 (비상 모드 확인)
+        
+        # 6. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="INVITATION_ACCEPTED",
+            description=f"User {accepting_user.username} accepted invitation for role {role_to_assign.name}",
+            actor_user=accepting_user,
+            details={
+                "role_id": role_to_assign.id,
+                "organization_id": request_schema.organization_id,
+                "access_request_id": request_schema.id
+            }
+        )
+        # 7. 후속 조치 (비상 모드 확인)
         governance_command_provider.check_and_update_emergency_mode(db, roles_changed=[role_to_assign])
         
         db.commit()

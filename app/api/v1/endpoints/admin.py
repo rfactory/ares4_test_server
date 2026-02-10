@@ -39,9 +39,11 @@ async def approve_upgrade_request(
 ):
     """
     접근 요청을 승인합니다. 승인 시, 역할을 바로 부여하지 않고 인증 코드를 발송합니다.
+    (Ares Aegis: 트랜잭션 및 감사 로그는 Policy 내부에서 처리됨)
     """
     current_user, _, _ = user_info
     try:
+        # Policy 내부에서 비즈니스 검증 + 상태 변경 + 감사 로그 + 커밋/롤백 완결
         updated_request = approve_request_policy_provider.execute(
             db=db, request_id=request_id, admin_user=current_user
         )
@@ -51,8 +53,8 @@ async def approve_upgrade_request(
     except AppLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {e}")
+        # db.rollback() 제거 (Policy가 이미 수행함)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
 
 @router.post("/upgrade-requests/{request_id}/reject", response_model=AccessRequestRead)
 async def reject_upgrade_request(
@@ -67,6 +69,7 @@ async def reject_upgrade_request(
     """
     current_user, _, _ = user_info
     try:
+        # Policy 내부에서 완결성 보장
         updated_request = reject_request_policy_provider.execute(
             db=db, request_id=request_id, admin_user=current_user
         )
@@ -76,5 +79,4 @@ async def reject_upgrade_request(
     except AppLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")

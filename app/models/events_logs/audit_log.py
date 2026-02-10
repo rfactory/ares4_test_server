@@ -22,11 +22,12 @@ class AuditLog(Base, TimestampMixin, LogBaseMixin, NullableUserFKMixin):
         Enum(
             'DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 
             'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 
-            'SERVER_CERTIFICATE_ACQUIRED_NEW', 'ORGANIZATION_CREATED', 
-            'ORGANIZATION_UPDATED', 'ORGANIZATION_DELETED', 
+            'SERVER_CERTIFICATE_ACQUIRED_NEW', 'SERVER_CERTIFICATE_REUSED',
+            'ORGANIZATION_CREATED', 'ORGANIZATION_UPDATED', 'ORGANIZATION_DELETED', 
             'ACCESS_REQUEST_CREATED', 'ACCESS_REQUEST_UPDATED', 'ACCESS_REQUEST_DELETED',
             'USER_ROLE_ASSIGNED', 'USER_ROLE_REVOKED', 'USER_LOGIN_FAILED',
-            name='audit_log_event_type' # 이름을 명확히 지정
+            name='audit_log_event_type',
+            create_type=False# 이름을 명확히 지정
         ), 
         nullable=False, 
         default='AUDIT'
@@ -39,8 +40,4 @@ class AuditLog(Base, TimestampMixin, LogBaseMixin, NullableUserFKMixin):
     
     # 2. AuditLogDetail과의 관계 (1:N)
     # Mapped[List["..." ]] 스타일로 통일 권장
-    details_items: Mapped[List["AuditLogDetail"]] = relationship(
-        "AuditLogDetail", 
-        back_populates="audit_log",
-        cascade="all, delete-orphan" # 로그 삭제 시 상세 내역도 함께 정리
-    )
+    details_items: Mapped[List["AuditLogDetail"]] = relationship("AuditLogDetail", back_populates="audit_log", cascade="all, delete-orphan") # 로그 삭제 시 상세 내역도 함께 정리

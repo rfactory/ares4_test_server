@@ -1,6 +1,6 @@
 import logging
 from typing import List, Optional, Tuple
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -29,21 +29,23 @@ async def login_access_token(
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
     """
-    OAuth2 compatible token login, get an access token for future requests.
-    The form field "username" is used to receive the user's email.
+    OAuth2 compatible token login.
+    Ares Aegis: 비즈니스 검증, 감사 로그, 트랜잭션 커밋은 LoginPolicy 내부에서 수행됩니다.
     """
-    form_payload = await request.form()
-    raw_username = form_payload.get("username")
-    
     try:
+        # Policy가 인증 성공 시 감사 로그 기록 후 최종 db.commit()까지 완료합니다.
         result = await login_policy_provider.login(
             db, email=form_data.username, password=form_data.password, request=request
         )
-        db.commit()
         return result
     except AuthenticationError as e:
-        db.rollback()
-        raise HTTPException(status_code=401, detail=str(e), headers={"WWW-Authenticate": "Bearer", "DPoP-Nonce": security.generate_dpop_nonce()})
+        # 실패 시 Policy 내부에서 이미 rollback이 수행되었습니다.
+        # API 계층에서는 보안 규격(DPoP Nonce 등)에 맞는 에러 응답만 반환합니다.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail=str(e), 
+            headers={"WWW-Authenticate": "Bearer", "DPoP-Nonce": security.generate_dpop_nonce()}
+        )
 
 @router.post("/login/refresh", status_code=200)
 async def refresh_token(
@@ -61,17 +63,20 @@ async def refresh_token(
             old_refresh_token=request_in.refresh_token,
             request=request
         )
-        db.commit()
         return result
-    except HTTPException as e:
-        db.rollback()
-        raise e
     except AuthenticationError as e:
-        db.rollback()
-        raise HTTPException(status_code=401, detail=str(e), headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail=str(e), 
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"An unexpected error occurred: {e}"
+        )
 
 @router.post("/register/initiate")
 async def initiate_registration(
@@ -80,17 +85,17 @@ async def initiate_registration(
     user_in: UserCreate
 ):
     """
-    새로운 사용자 가입 절차를 시작합니다.
+    새로운 사용자 가입 절차를 시작합니다. (가입 대기 상태 생성 및 메일 발송)
     """
     try:
         result = await registration_policy_provider.initiate_registration(db, user_in=user_in)
         return result
     except DuplicateEntryError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
 
 @router.post("/register/complete")
 async def complete_registration(
@@ -100,27 +105,27 @@ async def complete_registration(
     registration_data: CompleteRegistration
 ):
     """
-    제출된 인증 코드를 검증하여 가입 절차를 완료합니다.
+    제출된 인증 코드를 검증하여 가입 절차를 최종 완료합니다.
     """
     try:
+        # RegistrationPolicy 내부에서 사용자 활성화, 감사 로그, 커밋이 이루어집니다.
         result = await registration_policy_provider.complete_registration(
             db=db,
             email=registration_data.email,
             verification_code=registration_data.verification_code,
             request=request
         )
-        db.commit()
         return result
     except (NotFoundError, ValidationError) as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e), headers={"DPoP-Nonce": security.generate_dpop_nonce()})
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=str(e), 
+            headers={"DPoP-Nonce": security.generate_dpop_nonce()}
+        )
     except HTTPException as e:
-        db.rollback()
         raise e
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
-
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
 
 @router.post("/context-switch", response_model=UserWithToken)
 async def context_switch(
@@ -132,9 +137,11 @@ async def context_switch(
 ):
     """
     시스템 관리자가 다른 조직 컨텍스트로 전환하고 해당 조직 ID가 포함된 새 JWT를 발급받습니다.
+    Ares Aegis: 전환 내역은 ContextSwitchPolicy에서 감사 로그로 영구 기록됩니다.
     """
     current_user, current_user_jwt, dpop_jkt = user_info
     try:
+        # Policy가 로그 기록과 커밋을 모두 수행합니다.
         result = await context_switch_policy_provider.execute(
             db=db,
             current_user_jwt=current_user_jwt,
@@ -142,17 +149,20 @@ async def context_switch(
             request=request,
             dpop_jkt=dpop_jkt
         )
-        db.commit()
         return result
     except (PermissionDeniedError, AuthenticationError) as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e), headers={"DPoP-Nonce": security.generate_dpop_nonce()})
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail=str(e), 
+            headers={"DPoP-Nonce": security.generate_dpop_nonce()}
+        )
     except NotFoundError as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e), headers={"DPoP-Nonce": security.generate_dpop_nonce()})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=str(e), 
+            headers={"DPoP-Nonce": security.generate_dpop_nonce()}
+        )
     except HTTPException as e:
-        db.rollback()
         raise e
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")

@@ -11,11 +11,12 @@ from .objects.supported_component import SupportedComponent
 from .objects.subscription_plan import SubscriptionPlan
 from .objects.governance import GovernanceRule
 from .objects.refresh_token import RefreshToken
-from .objects.system_unit import SystemUnit # New
-from .objects.image_registry import ImageRegistry # New
-from .objects.vision_feature import VisionFeature # New
-from .objects.action_log import ActionLog # New
-from .objects.device_role import DeviceRole # New
+from .objects.system_unit import SystemUnit
+from .objects.image_registry import ImageRegistry
+from .objects.vision_feature import VisionFeature
+from .objects.action_log import ActionLog
+from .objects.device_role import DeviceRole
+from .objects.provisioning_token import ProvisioningToken
 
 
 from .relationships.user_organization_role import UserOrganizationRole
@@ -34,8 +35,8 @@ from .relationships.schedule import Schedule
 from .relationships.trigger_rule import TriggerRule
 from .relationships.user_subscription import UserSubscription
 from .relationships.supported_component_metadata import SupportedComponentMetadata
-from .relationships.device_role_assignment import DeviceRoleAssignment # New
-from .relationships.plan_applicable_product_line import PlanApplicableProductLine # New
+from .relationships.device_role_assignment import DeviceRoleAssignment
+from .relationships.plan_applicable_product_line import PlanApplicableProductLine
 
 
 from .events_logs.audit_log import AuditLog
@@ -46,13 +47,17 @@ from .events_logs.firmware_update import FirmwareUpdate
 from .events_logs.consumable_usage_log import ConsumableUsageLog
 from .events_logs.alert_event import AlertEvent
 from .events_logs.telemetry_metadata import TelemetryMetadata
-from .events_logs.unit_activity_log import UnitActivityLog # New
+from .events_logs.unit_activity_log import UnitActivityLog
 from .events_logs.user_consumable import UserConsumable
+from .events_logs.observation_snapshot import ObservationSnapshot
+from .events_logs.batch_tracking import BatchTracking
 
 from .internal.internal_asset_definition import InternalAssetDefinition
 from .internal.internal_asset_inventory import InternalAssetInventory
 from .internal.internal_asset_purchase_record import InternalAssetPurchaseRecord
 from .internal.internal_blueprint_component import InternalBlueprintComponent
+from .internal.internal_system_unit_physical_component import InternalSystemUnitPhysicalComponent
+
 
 
 __all__ = [
@@ -74,6 +79,7 @@ __all__ = [
     "VisionFeature",
     "ActionLog",
     "DeviceRole",
+    "ProvisioningToken",
 
     "UserOrganizationRole",
     "OrganizationDevice",
@@ -104,9 +110,12 @@ __all__ = [
     "TelemetryMetadata",
     "UserConsumable",
     "UnitActivityLog",
+    "ObservationSnapshot",
+    "BatchTracking",
 
     "InternalAssetDefinition",
     "InternalAssetInventory",
     "InternalAssetPurchaseRecord",
     "InternalBlueprintComponent",
+    "InternalSystemUnitPhysicalComponent",
 ]

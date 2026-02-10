@@ -1,126 +1,126 @@
 import logging
-import time
-import redis
-from datetime import datetime, timedelta, timezone
-import requests 
-import json
-import uuid # Import uuid
-
+import asyncio
+import uuid
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.core.config import settings
-from app.domains.inter_domain.device_management.device_query_provider import device_management_query_provider # NEW
+from app.core.redis_client import get_redis_client # [개선] 공통 모듈 사용
 from app.models.objects.device import DeviceStatusEnum
-from app.domains.inter_domain.device_log.device_log_command_provider import device_log_command_provider
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("device_health_checker.log")
-    ]
-)
+# --- 인터도메인 제공자(전문가) 임포트 ---
+from app.domains.inter_domain.device_management.device_query_provider import device_management_query_provider
+from app.domains.inter_domain.device_log.device_log_command_provider import device_log_command_provider
+from app.domains.inter_domain.mqtt_gateway.mqtt_command_provider import mqtt_command_provider
+from app.domains.inter_domain.policies.server_certificate_acquisition.server_certificate_acquisition_policy import server_certificate_acquisition_policy
+
 logger = logging.getLogger(__name__)
 
-# New function to call the internal API
-def publish_via_internal_api(topic: str, command: dict):
-    """
-    Calls the internal API to dispatch an MQTT command.
-    """
-    try:
-        url = f"http://{settings.SERVER_HOST}:{settings.SERVER_PORT}/api/v1/internal/dispatch-command"
-        payload = {"topic": topic, "command": command}
-        response = requests.post(url, json=payload, timeout=5)
-        response.raise_for_status() # Raise an exception for bad status codes
-        logger.info(f"Successfully requested command dispatch via internal API for topic: {topic}")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to call internal API to dispatch command for topic {topic}: {e}", exc_info=True)
-
-
-def get_redis_client():
-    return redis.Redis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        db=settings.REDIS_DB,
-        decode_responses=True
-    )
-
-def main():
-    logger.info("Device health checker started.")
+async def check_device_health():
+    """Redis 상태를 확인하여 타임아웃 기기를 판별하고 조치합니다."""
     redis_client = get_redis_client()
+    db: Session = SessionLocal()
+    
+    try:
+        # device_state:* 패턴의 모든 키를 가져옴
+        for key in redis_client.scan_iter("device_state:*"):
+            # [수정] Redis 키가 bytes 타입으로 올 경우를 대비해 문자열로 변환합니다.
+            if isinstance(key, bytes):
+                key = key.decode('utf-8')
+                
+            device_uuid_str = key.split(':')[1]
+            cached_state = redis_client.hgetall(key)
+            
+            # [수정] Redis 필드값들도 문자열로 변환하여 에러를 방지합니다.
+            state = {
+                (k.decode('utf-8') if isinstance(k, bytes) else k): 
+                (v.decode('utf-8') if isinstance(v, bytes) else v) 
+                for k, v in cached_state.items()
+            }
+            
+            # ONLINE 상태인 기기만 검사
+            if state.get("device_status") == DeviceStatusEnum.ONLINE.value:
+                last_seen_at_raw = state.get("last_seen_at")
+                if not last_seen_at_raw:
+                    continue
+                    
+                last_seen_at = datetime.fromisoformat(last_seen_at_raw).replace(tzinfo=timezone.utc)
+                
+                # 설정된 타임아웃 시간을 초과했는지 확인
+                if (datetime.now(timezone.utc) - last_seen_at) > timedelta(seconds=settings.DEVICE_TIMEOUT_SECONDS):
+                    logger.warning(f"🚨 Device {device_uuid_str} timed out.")
+                    
+                    # 1. Redis 상태 업데이트
+                    redis_client.hset(key, "device_status", DeviceStatusEnum.TIMEOUT.value)
+                    
+                    # 2. DB 상태 업데이트 및 로그 기록 (Provider 활용)
+                    try:
+                        # [핵심 수정] UUID 형식을 엄격하게 검사합니다. 
+                        # 형식이 틀리면 ValueError가 발생하며, 해당 키는 처리하지 않고 넘어갑니다.
+                        device_uuid = uuid.UUID(device_uuid_str)
+                        
+                        db_device = device_management_query_provider.get_device_by_uuid(db, current_uuid=device_uuid)
+                        if db_device and db_device.status != DeviceStatusEnum.TIMEOUT:
+                            db_device.status = DeviceStatusEnum.TIMEOUT
+                            device_log_command_provider.create_device_log(
+                                db=db, device_id=db_device.id, log_level="WARNING",
+                                description=f"Device timed out. Last seen at {last_seen_at.isoformat()}."
+                            )
+                            db.commit()
+
+                        # 3. [핵심] 헬스체커가 직접 MQTT 명령 발행 (HTTP 대신 Provider 호출)
+                        if user_email := state.get("user_email"):
+                            mqtt_command_provider.publish_command(
+                                db=db,
+                                topic=f"users/{user_email}/devices/{device_uuid_str}/status",
+                                command={"status": DeviceStatusEnum.TIMEOUT.value}
+                            )
+                    except ValueError:
+                        # UUID 형식이 아닌 잘못된 키에 대한 경고 로그
+                        logger.error(f"❌ Invalid UUID format found in Redis key: '{device_uuid_str}'. Skipping this entry.")
+                        continue
+                            
+    except Exception as e:
+        logger.error(f"Health Checker Loop Error: {e}", exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+async def main():
+    logger.info("🚀 Ares4 Device Health Checker Running...")
+    db: Session = SessionLocal()
+    
+    try:
+        # 1. 인증서 획득(Policy 호출)
+        logger.info("🔑 Acquiring MQTT certificate via Policy...")
+        
+        # 동기 함수가 루프를 차단하지 않도록 별도 쓰레드에서 실행
+        loop = asyncio.get_running_loop()
+        new_cert_data = await loop.run_in_executor(
+            None,
+            lambda: server_certificate_acquisition_policy.acquire_valid_server_certificate(
+                db=db,
+                current_cert_data=None
+            )
+        )
+        
+        # 2. Connection Manager에 인증서 데이터 주입
+        mqtt_command_provider._connection_manager.set_certificate_data(new_cert_data)
+        
+        # 3. 연결 수립
+        await mqtt_command_provider._connection_manager.connect()
+        logger.info("✅ MQTT Connection established for health checker.")
+        
+    except Exception as e:
+        logger.error(f"❌ Initialization failed: {e}")
+        return
+    finally:
+        db.close()
 
     while True:
-        db: Session = SessionLocal()
-        try:
-            device_state_keys = [key for key in redis_client.scan_iter("device_state:*")]
-
-            for key in device_state_keys:
-                device_uuid_str = key.split(':')[1]
-                device_uuid = uuid.UUID(device_uuid_str)
-                
-                cached_state = redis_client.hgetall(key)
-                
-                device_status = cached_state.get("device_status")
-                last_seen_at_str = cached_state.get("last_seen_at")
-                user_email = cached_state.get("user_email")
-
-                if device_status == DeviceStatusEnum.ONLINE.value and last_seen_at_str:
-                    try:
-                        last_seen_at = datetime.fromisoformat(last_seen_at_str)
-                        
-                        if last_seen_at.tzinfo is None:
-                            last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
-                        
-                        time_difference = datetime.now(timezone.utc) - last_seen_at
-
-                        if time_difference > timedelta(seconds=settings.DEVICE_TIMEOUT_SECONDS):
-                            logger.warning(f"Device {device_uuid_str} timed out. Last seen {last_seen_at_str}.")
-                            
-                            # Update status in Redis
-                            redis_client.hset(key, "device_status", DeviceStatusEnum.TIMEOUT.value)
-
-                            db_device = device_management_query_provider.get_device_by_uuid(db, current_uuid=device_uuid) # UPDATED
-                            if db_device and db_device.status != DeviceStatusEnum.TIMEOUT:
-                                db_device.status = DeviceStatusEnum.TIMEOUT
-                                db.add(db_device)
-
-                                # Log the TIMEOUT event to device_log table
-                                device_log_command_provider.create_device_log(
-                                    db=db,
-                                    device_id=db_device.id,
-                                    log_level="WARNING",
-                                    description=f"Device timed out. Last seen at {last_seen_at_str}."
-                                )
-                                
-                                db.commit()
-                                logger.info(f"Updated DB status for {device_uuid_str} to {DeviceStatusEnum.TIMEOUT.value} and created device log.")
-
-                                # Publish updated state via internal API
-                                if user_email:
-                                    topic = f"users/{user_email}/devices/{device_uuid_str}/status"
-                                    payload = {"status": DeviceStatusEnum.TIMEOUT.value}
-                                    publish_via_internal_api(topic=topic, command=payload)
-                                else:
-                                    logger.warning(f"Could not find user_email for device {device_uuid_str} to publish TIMEOUT state update.")
-                            elif not db_device:
-                                logger.error(f"Timed out device {device_uuid_str} not found in DB.")
-                            
-                    except ValueError as ve:
-                        logger.error(f"Invalid last_seen_at format for {device_uuid_str}: {last_seen_at_str}. Error: {ve}")
-            
-        except Exception as e:
-            logger.error(f"Error in device health checker loop: {e}", exc_info=True)
-            if db:
-                db.rollback()
-        finally:
-            if db:
-                db.close()
-
-        logger.info(f"Next check in {settings.DEVICE_HEALTH_CHECK_INTERVAL_SECONDS} seconds.")
-        time.sleep(settings.DEVICE_HEALTH_CHECK_INTERVAL_SECONDS)
+        await check_device_health()
+        await asyncio.sleep(settings.DEVICE_HEALTH_CHECK_INTERVAL_SECONDS)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

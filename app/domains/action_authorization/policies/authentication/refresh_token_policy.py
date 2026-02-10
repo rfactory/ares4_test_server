@@ -9,6 +9,7 @@ from app.domains.inter_domain.user_identity.user_identity_query_provider import 
 from app.domains.inter_domain.token_management.token_management_command_provider import token_management_command_provider
 from app.domains.inter_domain.validators.object_existence.object_existence_validator_provider import object_existence_validator_provider
 from app.core.security import verify_dpop_proof
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,19 @@ class RefreshTokenPolicy:
             user=user,
             dpop_jkt=dpop_jkt # dpop_jkt 전달
         )
-
+        
+        # 5. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="TOKEN_REFRESHED",
+            description=f"Token refreshed for User ID: {user.id}",
+            actor_user=user,
+            details={"user_id": user.id, "token_id": token_obj.id}
+        )
+        
+        # 6. 트랜잭션 커밋
+        db.commit()
+        
         return new_token_pair
 
 refresh_token_policy = RefreshTokenPolicy()

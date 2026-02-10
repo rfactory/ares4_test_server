@@ -151,7 +151,12 @@ def verify_access_token(token: str, dpop_jkt: Optional[str] = None) -> TokenPayl
     payload = decode_access_token(token, dpop_jkt=dpop_jkt)
     try:
         user_id = int(payload.get("sub"))
-        return TokenPayload(id=user_id)
+        
+        temp_org_id = payload.get("temp_org_id")
+        if temp_org_id is not None:
+            temp_org_id = int(temp_org_id)
+        
+        return TokenPayload(id=user_id, temp_org_id=temp_org_id)
     except (ValueError, TypeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
@@ -191,9 +196,12 @@ async def verify_dpop_proof(request: Request, access_token: Optional[str] = None
         
         redis_client = get_redis_client()
         redis_key = f"dpop_jti:{jti}"
-        if redis_client.exists(redis_key):
-            raise HTTPException(status_code=401, detail={"error": "use_dpop_nonce", "message": "DPoP proof re-used"})
-        redis_client.set(redis_key, 1, ex=120)
+        
+        if not redis_client.set(redis_key, 1, ex=120, nx=True):
+            raise HTTPException(
+                status_code=401, 
+                detail={"error": "use_dpop_nonce", "message": "DPoP proof re-used"}
+            )
 
         # 4. Nonce 검증
         nonce = dpop_payload.get("nonce")

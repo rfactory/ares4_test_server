@@ -14,6 +14,7 @@ from app.domains.inter_domain.user_role_assignment.user_role_assignment_command_
 from app.domains.inter_domain.user_role_assignment.user_role_assignment_query_provider import user_role_assignment_query_provider
 from app.domains.inter_domain.governance.governance_command_provider import governance_command_provider
 from app.domains.inter_domain.governance.governance_query_provider import governance_query_provider
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class UpdateUserRolesPolicy:
     def execute(
@@ -28,7 +29,7 @@ class UpdateUserRolesPolicy:
         """
         사용자 역할 변경의 전체 워크플로우를 조율(Orchestrate)합니다.
         """
-        # 1. 데이터 조회
+        # 1. 데이터 조회 (기존 로직 동일)
         actor_user = user_identity_query_provider.get_user(db, user_id=actor_user_id)
         if not actor_user:
             raise NotFoundError(resource="Actor User", resource_id=str(actor_user_id))
@@ -90,13 +91,30 @@ class UpdateUserRolesPolicy:
             db=db, target_user=target_user, roles_to_assign=roles_to_assign,
             roles_to_revoke=roles_to_revoke, actor_user=actor_user
         )
+        
+        # 4. 감사 로그 기록
+        assigned_names = [r.name for r in roles_to_assign]
+        revoked_names = [r.name for r in roles_to_revoke]
+        
+        audit_command_provider.log(
+            db=db,
+            event_type="USER_ROLES_UPDATED",
+            description=f"Roles updated for User {target_user.username} by {actor_user.username}",
+            actor_user=actor_user,
+            details={
+                "target_user_id": target_user_id,
+                "assigned_roles": assigned_names,
+                "revoked_roles": revoked_names,
+                "emergency_check": bool(roles_to_assign or roles_to_revoke)
+            }
+        )
 
-        # 4. 후속 조치 (비상 모드 확인)
+        # 5. 후속 조치 (비상 모드 확인)
         roles_changed = roles_to_assign + roles_to_revoke
         if roles_changed: # 역할 변경이 있었던 경우에만 실행
             governance_command_provider.check_and_update_emergency_mode(db, roles_changed=roles_changed)
 
-        # 5. 트랜잭션 커밋
+        # 6. 트랜잭션 커밋
         db.commit()
 
 update_user_roles_policy = UpdateUserRolesPolicy()

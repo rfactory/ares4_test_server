@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Tuple, Optional
 from datetime import datetime, timezone
 
-from app.domains.inter_domain.user_identity.providers import user_identity_providers
+from app.domains.inter_domain.user_identity.user_identity_query_provider import user_identity_query_provider
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class TwoFactorCodeValidator:
             (True, None): 코드가 유효한 경우
             (False, error_message): 사용자가 없거나 코드가 틀리거나 만료된 경우
         """
-        user = user_identity_providers.get_user_by_username(db, username=username)
+        user = user_identity_query_provider.get_user_by_username(db, username=username)
 
         if not user:
             # PasswordValidator가 먼저 실행되므로 이론적으로는 이 경우에 도달해서는 안 되지만, 안정성을 위해 포함합니다.

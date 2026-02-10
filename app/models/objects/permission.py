@@ -1,20 +1,43 @@
-from sqlalchemy import Column, BigInteger, String, Text, Boolean
-from sqlalchemy.orm import relationship
+from sqlalchemy import BigInteger, String, Text, Boolean
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import TYPE_CHECKING, List, Optional
 from app.database import Base
 from ..base_model import TimestampMixin
 
+if TYPE_CHECKING:
+    # RolePermission 중간 테이블과의 관계를 위한 임포트
+    from app.models.relationships.role_permission import RolePermission
+
 class Permission(Base, TimestampMixin):
     """
-    권한 모델은 시스템 내에서 특정 작업에 대한 접근 제어를 정의합니다.
-    각 권한은 고유한 이름을 가지며 역할에 할당될 수 있습니다.
+    [Object] 권한 모델:
+    시스템 내에서 수행 가능한 구체적인 액션(예: 'device:read', 'user:delete')을 정의합니다.
     """
     __tablename__ = "permissions"
 
-    id = Column(BigInteger, primary_key=True, index=True) # 권한의 고유 ID
-    name = Column(String(100), unique=True, nullable=False, index=True) # 권한의 고유 이름 (예: 'device:read', 'user:create')
-    description = Column(Text, nullable=True) # 권한에 대한 설명
-    ui_group = Column(String, nullable=True) # 권한을 그룹화할 UI 메뉴 이름
-    is_system_locked = Column(Boolean, default=False, nullable=False, server_default='false') # 시스템 핵심 권한으로, UI에서 편집 불가능하게 할지 여부
+    # 1. Mapped와 mapped_column으로 전환하여 타입 안정성 확보
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     
-    # --- Relationships ---
-    roles = relationship("RolePermission", back_populates="permission") # 이 권한이 할당된 역할 목록
+    # 권한 식별자 (예: 'system_unit:reboot')
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # UI에서 권한 리스트를 보여줄 때 그룹핑 기준 (예: '장치 관리', '회계 관리')
+    ui_group: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    
+    # 시스템 필수 권한 여부 (True인 경우 관리자도 UI에서 수정/삭제 불가)
+    is_system_locked: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default='false'
+    )
+    
+    # --- Relationships (Mapped 적용 완료) ---
+    # RolePermission 중간 테이블을 통해 여러 Role과 연결됨 (N:M)
+    roles: Mapped[List["RolePermission"]] = relationship(
+        "RolePermission", 
+        back_populates="permission",
+        cascade="all, delete-orphan" # 권한 정의가 사라지면 할당 정보도 함께 삭제
+    )
+
+    def __repr__(self):
+        return f"<Permission(name={self.name}, ui_group={self.ui_group})>"

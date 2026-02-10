@@ -1,33 +1,38 @@
 import logging
-from sqlalchemy.orm import Session
 from typing import Tuple, Optional
-from uuid import UUID
-
-# inter_domain의 올바른 경로에서 provider와 schema를 가져옵니다.
-from app.domains.inter_domain.device_management.device_query_provider import device_management_query_provider
+# 쿼리 결과로 넘어올 스키마 정보를 참조합니다.
+from app.domains.inter_domain.device_management.schemas.device_query import DeviceRead
 
 logger = logging.getLogger(__name__)
 
 class DeviceExistenceValidator:
-    def validate(self, db: Session, *, device_uuid_str: str) -> Tuple[bool, Optional[str]]:
-        """
-        주어진 UUID로 장치가 DB에 실제로 존재하는지 확인하는 '판단'을 내립니다.
-        성공 시 (True, None), 실패 시 (False, "에러 메시지")를 반환합니다.
-        """
-        try:
-            device_uuid = UUID(device_uuid_str)
-        except ValueError:
-            return False, f"Invalid device UUID format: {device_uuid_str}"
+    """
+    장치의 존재 여부 및 활성화 상태를 전문적으로 '판단'하는 Validator입니다.
+    데이터 조회(Query)는 외부에서 수행된 후 결과값만 전달받습니다.
+    """
 
-        # get_device_by_uuid를 사용하여 장치를 직접 조회합니다.
-        device = device_management_query_provider.get_device_by_uuid(db, current_uuid=device_uuid)
+    def validate_existence(self, *, device: Optional[DeviceRead]) -> Tuple[bool, Optional[str]]:
+        """
+        공급받은 장치 데이터를 바탕으로 접속 허용 여부를 판단합니다.
         
+        - device: Query Provider가 조회한 결과물 (없으면 None)
+        - 반환값: (성공여부, 에러메시지)
+        """
+        
+        # 1. 존재 여부 판단 (데이터가 비어있는지 확인)
         if not device:
-            msg = f"Device with UUID {device_uuid_str} not found."
-            logger.warning(f"VALIDATOR: {msg}")
+            return False, "Device existence check failed."
+
+        # 2. 상태값 판단 (활성화된 기기인지 확인)
+        # 나중에 'SUSPENDED', 'PENDING' 등 복잡한 상태 정책이 생겨도 여기서 관리합니다.
+        if device.status != "ONLINE":
+            msg = f"Device access denied: Current status is '{device.status}' (Expected: 'ONLINE')."
+            logger.warning(f"[Validator] {msg} for ID: {device.id}")
             return False, msg
-        
-        # 장치가 존재하므로 검증 성공
+
+        # 모든 판단 통과
+        logger.info(f"[Validator] Device existence and status verified for ID: {device.id}")
         return True, None
 
+# 싱글톤 객체 생성
 device_existence_validator = DeviceExistenceValidator()

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ..crud.organization_query_crud import organization_crud_query
 from ..crud.organization_type_query_crud import organization_type_crud_query
 from ..schemas.organization_query import OrganizationResponse, OrganizationTypeResponse
+from app.models.objects.organization import Organization
 
 class OrganizationQueryService:
     """
@@ -44,5 +45,14 @@ class OrganizationQueryService:
         """여러 조직 유형 정보를 페이지네이션하여 조회합니다."""
         db_objs = organization_type_crud_query.get_multi(db, skip=skip, limit=limit)
         return [OrganizationTypeResponse.model_validate(obj) for obj in db_objs]
+    
+    # [Internal] ORM 객체 반환 메서드들
+    def get_organizations_entry(self, db: Session, org_id: int) -> Optional[Organization]:
+        """(Internal) ID로 조직의 ORM 객체를 직접 반환합니다."""
+        return organization_crud_query.get(db, id=org_id)
+
+    def get_organization_entry_by_registration_number(self, db: Session, registration_number: str) -> Optional[Organization]:
+        """(Internal) 사업자 번호로 조직의 ORM 객체를 직접 반환합니다."""
+        return organization_crud_query.get_by_registration_number(db, registration_number=registration_number)
 
 organization_query_service = OrganizationQueryService()

@@ -1,33 +1,74 @@
-from sqlalchemy import Column, BigInteger, String, DateTime, Float, Index, text, Integer, ForeignKey
+from sqlalchemy import BigInteger, String, Float, Index, Integer, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import Optional
+from typing import Optional, Dict, List, TYPE_CHECKING
 from datetime import datetime
-from sqlalchemy.sql import func
+from sqlalchemy.dialects import postgresql  # JSONB 유지를 위해 필요
 
 from app.database import Base
-from ..base_model import TimestampMixin, DeviceFKMixin, SystemUnitFKMixin # SystemUnitFKMixin 추가
+from ..base_model import TimestampMixin, DeviceFKMixin, SystemUnitFKMixin
+
+if TYPE_CHECKING:
+    from .telemetry_metadata import TelemetryMetadata
+    from .observation_snapshot import ObservationSnapshot
+    from ..objects.device import Device
+    from ..objects.system_unit import SystemUnit
 
 class TelemetryData(Base, TimestampMixin, DeviceFKMixin, SystemUnitFKMixin):
     """
-    [Log] 텔레메트리 데이터 모델입니다.
-    장치에서 수집된 센서 데이터 및 기타 측정값을 저장합니다.
-    수조 건의 데이터 속에서도 클러스터 상태를 즉시 조회할 수 있도록 SystemUnit과 연결됩니다.
+    [Log] 텔레메트리 데이터 모델:
+    장치에서 수집된 센서 데이터의 통계치를 저장하며, MLP 모델의 State 입력으로 사용됩니다.
     """
     __tablename__ = "telemetry_data"
     __table_args__ = (
-        Index('idx_telemetry_device_time', 'device_id', 'created_at'), # 기존 인덱스 유지
-        Index('idx_telemetry_system_unit_time', 'system_unit_id', 'created_at'), # SystemUnit 별 조회 성능 향상
+        Index('idx_telemetry_device_time', 'device_id', 'created_at'),
+        Index('idx_telemetry_system_unit_time', 'system_unit_id', 'created_at'),
+        Index('idx_telemetry_snapshot_id', 'snapshot_id'),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 텔레메트리 데이터의 고유 ID
-    # device_id는 DeviceFKMixin으로부터 상속받습니다. (BigInteger)
-    # system_unit_id는 SystemUnitFKMixin으로부터 상속받습니다. (BigInteger)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=func.now()) # 데이터가 측정된 시간 (created_at과 동기화)
-    metric_name: Mapped[str] = mapped_column(String(100), nullable=False) # 측정 항목의 이름 (예: 'temperature', 'humidity')
-    metric_value: Mapped[float] = mapped_column(Float, nullable=False) # 측정된 값
-    unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True) # 측정 값의 단위 (예: '°C', '%')
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     
-    # --- Relationships ---
-    device = relationship("Device", back_populates="telemetry_data") # 이 텔레메트리 데이터를 생성한 장치 정보
-    system_unit = relationship("SystemUnit", back_populates="telemetry_data") # 이 텔레메트리 데이터가 속한 시스템 유닛 정보
-    metadata_items = relationship("TelemetryMetadata", back_populates="telemetry_data") # 이 텔레메트리 데이터에 대한 메타데이터 항목 목록
+    # ObservationSnapshot과의 연결 고리
+    snapshot_id: Mapped[str] = mapped_column(
+        String(255), 
+        ForeignKey("observation_snapshots.id"), 
+        nullable=False, 
+        comment="이미지 및 Action 데이터와 동기화를 위한 고유 키"
+    )
+
+    # --- 데이터 종류 식별 ---
+    metric_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="측정 항목명 (temp, co2 등)")
+    unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, comment="측정 단위")
+
+    # --- 10초간의 통계값 (AI State 입력 핵심) ---
+    avg_value: Mapped[float] = mapped_column(Float, nullable=False)
+    min_value: Mapped[float] = mapped_column(Float, nullable=False)
+    max_value: Mapped[float] = mapped_column(Float, nullable=False)
+    std_dev: Mapped[float] = mapped_column(Float, nullable=False, comment="안정성 지표")
+    slope: Mapped[float] = mapped_column(Float, nullable=False, comment="추세(기울기) 지표")
+    sample_count: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    
+    captured_at: Mapped[datetime] = mapped_column(
+        postgresql.TIMESTAMP(timezone=True), 
+        nullable=False, 
+        index=True,
+        comment="센서에서 실제 측정된 시각"
+    )
+
+    # --- 비정형 추가 데이터 (JSONB) ---
+    extra_stats: Mapped[Optional[Dict]] = mapped_column(postgresql.JSONB, nullable=True)
+
+    # --- Relationships (Mapped 적용 완료) ---
+    
+    # 부모: 스냅샷 (RL 상태의 중심)
+    snapshot: Mapped["ObservationSnapshot"] = relationship(
+        "ObservationSnapshot", back_populates="telemetry_data"
+    )
+    
+    # 부모: 장치 및 시스템 유닛
+    device: Mapped["Device"] = relationship("Device", back_populates="telemetry_data")
+    system_unit: Mapped["SystemUnit"] = relationship("SystemUnit", back_populates="telemetry_data")
+    
+    # 자식: 메타데이터 상세
+    metadata_items: Mapped[List["TelemetryMetadata"]] = relationship(
+        "TelemetryMetadata", back_populates="telemetry_data", cascade="all, delete-orphan"
+    )

@@ -13,6 +13,7 @@ from app.domains.inter_domain.validators.governance.governance_validator_provide
 from app.domains.inter_domain.validators.headcount.headcount_validator_provider import headcount_validator_provider
 from app.domains.inter_domain.validators.object_existence.object_existence_validator_provider import object_existence_validator_provider
 from app.domains.services.user_identity.schemas.user_identity_command import UserRoleAssignmentCreate
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class ManageOrganizationMemberPolicy:
     """
@@ -43,6 +44,17 @@ class ManageOrganizationMemberPolicy:
 
         # 4. 최종 실행
         user_organization_role_command_provider.delete_by_context(db, user_id=user_to_remove_id, organization_id=organization_id)
+        
+        # 5. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="ORG_MEMBER_REMOVED",
+            description=f"User ID {user_to_remove_id} removed from Org {organization_id}",
+            actor_user=actor_user,
+            details={"target_user_id": user_to_remove_id, "org_id": organization_id}
+        )
+        
+        # 6. 최종 트랜잭션 커밋
         db.commit()
 
     def update_role(self, db: Session, *, actor_user: User, organization_id: int, user_to_update_id: int, new_role_id: int):
@@ -71,11 +83,24 @@ class ManageOrganizationMemberPolicy:
         )
 
         # 4. 최종 실행: 전부 삭제 후 새로 생성
-        user_organization_role_command_provider.delete_by_context(
-            db, user_id=user_to_update_id, organization_id=organization_id
-        )
+        user_organization_role_command_provider.delete_by_context(db, user_id=user_to_update_id, organization_id=organization_id)
         create_schema = UserRoleAssignmentCreate(user_id=user_to_update_id, role_id=new_role_id, organization_id=organization_id)
         user_organization_role_command_provider.create(db, obj_in=create_schema)
+        
+        # 5. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="ORG_MEMBER_ROLE_UPDATED",
+            description=f"Role updated for User ID {user_to_update_id} in Org {organization_id}",
+            actor_user=actor_user,
+            details={
+                "target_user_id": user_to_update_id,
+                "new_role_id": new_role_id,
+                "org_id": organization_id
+            }
+        )
+        
+        # 6. 최종 트랜잭션 커밋
         db.commit()
 
 manage_organization_member_policy = ManageOrganizationMemberPolicy()

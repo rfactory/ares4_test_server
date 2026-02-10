@@ -7,13 +7,13 @@ from .schemas.access_request_query import AccessRequestQuery, AccessRequestRead
 from app.models.objects.user import User # User 모델 import 추가
 
 class AccessRequestQueryProviders:
-    def get_access_requests(self, db: Session, *, query_params: AccessRequestQuery) -> List[AccessRequestRead]:
+    def get_access_requests(self, db: Session, *, query_params: AccessRequestQuery, actor_user: User) -> List[AccessRequestRead]:
         """접근 요청 목록을 조회하는 안정적인 인터페이스를 제공합니다."""
-        return access_request_query_service.get_access_requests(db, query_params=query_params)
+        return access_request_query_service.get_access_requests(db, query_params=query_params, current_user=actor_user)
     
-    def get_access_request_by_id(self, db: Session, *, request_id: int) -> Optional[AccessRequestRead]:
+    def get_access_request_by_id(self, db: Session, *, request_id: int, actor_user: User) -> Optional[AccessRequestRead]:
         """ID로 단일 접근 요청을 조회하는 안정적인 인터페이스를 제공합니다."""
-        return access_request_query_service.get_access_request_by_id(db, request_id=request_id)
+        return access_request_query_service.get_access_request_by_id(db, request_id=request_id, current_user=actor_user)
     
     def get_pending_requests_for_actor(
         self, db: Session, *, actor_user: User, organization_id: Optional[int]

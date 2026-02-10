@@ -1,8 +1,11 @@
 from sqlalchemy import BigInteger, Enum, JSON, Column # Column, BigInteger, JSON 추가
 from sqlalchemy.orm import relationship, Mapped, mapped_column # Mapped, mapped_column 추가
-from typing import Optional # Optional 추가
+from typing import Optional, TYPE_CHECKING
 from app.database import Base
 from ..base_model import TimestampMixin, LogBaseMixin, DeviceFKMixin # Added LogBaseMixin
+
+if TYPE_CHECKING:
+    from app.models.objects.device import Device
 
 class DeviceLog(Base, TimestampMixin, LogBaseMixin, DeviceFKMixin): # Inherit LogBaseMixin
     """
@@ -22,4 +25,4 @@ class DeviceLog(Base, TimestampMixin, LogBaseMixin, DeviceFKMixin): # Inherit Lo
     event_type: Mapped[str] = mapped_column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 'SERVER_CERTIFICATE_ACQUIRED_NEW', name='log_event_type'), nullable=False, default='DEVICE') # 로그 유형 (온톨로지 통합 쿼리 용)
 
     # --- Relationships ---
-    device = relationship("Device", back_populates="device_logs") # 이 로그를 생성한 장치 정보
+    device: Mapped["Device"] = relationship("Device", back_populates="device_logs") # 이 로그를 생성한 장치 정보

@@ -5,6 +5,9 @@ class UserBase(BaseModel):
     username: str
     email: EmailStr
 
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserInDBBase(UserBase):
     id: int
     is_active: bool = True

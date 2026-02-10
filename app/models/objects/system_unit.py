@@ -1,10 +1,10 @@
+import enum
 from sqlalchemy import BigInteger, String, Enum, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, List, TYPE_CHECKING # TYPE_CHECKING 추가
+from typing import Optional, List, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, OrganizationFKMixin, ProductLineFKMixin, NullableUserFKMixin, NullableSystemUnitFKMixin
+from ..base_model import TimestampMixin, NullableOrganizationFKMixin, ProductLineFKMixin, NullableUserFKMixin
 
-# 런타임 순환 참조 방지 및 타입 힌트 지원
 if TYPE_CHECKING:
     from app.models.objects.product_line import ProductLine
     from app.models.objects.organization import Organization
@@ -18,49 +18,89 @@ if TYPE_CHECKING:
     from app.models.relationships.organization_subscription import OrganizationSubscription
     from app.models.relationships.user_subscription import UserSubscription
     from app.models.relationships.alert_rule import AlertRule
+    from app.models.internal.internal_system_unit_physical_component import InternalSystemUnitPhysicalComponent
+    from app.models.relationships.schedule import Schedule
+    from app.models.relationships.trigger_rule import TriggerRule
+    from app.models.relationships.device_role_assignment import DeviceRoleAssignment
+    from app.models.events_logs.observation_snapshot import ObservationSnapshot
 
-class SystemUnit(Base, TimestampMixin, OrganizationFKMixin, ProductLineFKMixin, NullableUserFKMixin):
+# 1. 유닛 운영 상태 관리를 위한 Enum
+class UnitStatus(str, enum.Enum):
+    ACTIVE = 'ACTIVE'
+    INACTIVE = 'INACTIVE'
+    MAINTENANCE = 'MAINTENANCE'
+    PROVISIONING = 'PROVISIONING'
+
+class SystemUnit(Base, TimestampMixin, NullableOrganizationFKMixin, ProductLineFKMixin, NullableUserFKMixin):
     """
-    [Object] 시스템 유닛 (심장)
-    여러 장치(Device)를 묶어 하나의 논리적 서비스(예: 클러스터)로 관리합니다.
-    구독권과 1:1로 매칭되며, RL 모델이 상태를 관측하고 판단을 내리는 단위입니다.
+    [Object] 시스템 유닛 (The Hub):
+    Ares4 시스템의 모든 데이터와 로직이 집약되는 최상위 운영 단위입니다.
+    개별 장치를 클러스터링하고, AI 에이전트가 상태를 관측(Snapshot)하고 제어(Action)하는 기준점이 됩니다.
     """
     __tablename__ = "system_units"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     
-    # 유닛의 운영 상태 (ACTIVE: 가동, INACTIVE: 중지, MAINTENANCE: 점검, PROVISIONING: 생성중)
-    status: Mapped[str] = mapped_column(
-        Enum('ACTIVE', 'INACTIVE', 'MAINTENANCE', 'PROVISIONING', name='unit_status'),
-        default='PROVISIONING',
+    # 운영 상태 (Enum 적용)
+    status: Mapped[UnitStatus] = mapped_column(
+        Enum(UnitStatus, name='unit_status', create_type=False),
+        default=UnitStatus.PROVISIONING,
         nullable=False
     )
+    
+    # 2. 지능형 제어 로직 (스케줄 및 트리거)
+    schedules: Mapped[List["Schedule"]] = relationship(
+        "Schedule", back_populates="system_unit", cascade="all, delete-orphan"
+    )
+    trigger_rules: Mapped[List["TriggerRule"]] = relationship(
+        "TriggerRule", back_populates="system_unit", cascade="all, delete-orphan"
+    )
 
-    # 도메인별 가변 설정 (예: 팜의 목표 온도, 공장의 생산 목표량 등)
-    # 이 필드는 RL 서버가 'Goal'을 파악할 때 사용됩니다.
+    # 유닛별 가변 설정 (목표 온도, 가동 시간 등)
     unit_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # --- Relationships ---
     
-    # 1. 소속 및 정체성
+    # 1. 소속 및 정체성 (Top-Down 계층 구조 연결)
     product_line: Mapped["ProductLine"] = relationship("ProductLine", back_populates="system_units")
     organization: Mapped["Organization"] = relationship("Organization", back_populates="system_units")
-    user: Mapped[Optional["User"]] = relationship("User", back_populates="system_units") # 개인 소유일 경우 (NullableUserFKMixin)
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="system_units")
 
-    # 2. 하위 자산 (물리)
+    # 2. 하부 구조 (물리적 실체)
+    # [신하] 유닛에 소속된 컴퓨팅 노드들
     devices: Mapped[List["Device"]] = relationship("Device", back_populates="system_unit")
     
-    # 3. 데이터 및 지능 (AI/RL)
+    role_assignments: Mapped[List["DeviceRoleAssignment"]] = relationship(
+        "DeviceRoleAssignment", 
+        back_populates="system_unit",
+        cascade="all, delete-orphan"
+    )
+    
+    # [As-Built] 실제 조립된 물리 부품 리스트 (BOM 실물 버전)
+    physical_components: Mapped[List["InternalSystemUnitPhysicalComponent"]] = relationship(
+        "InternalSystemUnitPhysicalComponent",
+        back_populates="system_unit",
+        cascade="all, delete-orphan"
+    )
+    
+    # 3. 데이터 피드백 루프 (AI/RL의 핵심)
     telemetry_data: Mapped[List["TelemetryData"]] = relationship("TelemetryData", back_populates="system_unit")
-    unit_activities: Mapped[List["UnitActivityLog"]] = relationship("UnitActivityLog", back_populates="system_unit") # 통합 로그
-    action_logs: Mapped[List["ActionLog"]] = relationship("ActionLog", back_populates="system_unit") # RL 판단 기록
-    vision_features: Mapped[List["VisionFeature"]] = relationship("VisionFeature", back_populates="system_unit") # AI 분석 특징점
-    image_registries: Mapped[List["ImageRegistry"]] = relationship("ImageRegistry", back_populates="system_unit") # 배포 모델/이미지
+    unit_activities: Mapped[List["UnitActivityLog"]] = relationship("UnitActivityLog", back_populates="system_unit")
+    action_logs: Mapped[List["ActionLog"]] = relationship("ActionLog", back_populates="system_unit")
+    vision_features: Mapped[List["VisionFeature"]] = relationship("VisionFeature", back_populates="system_unit")
+    image_registries: Mapped[List["ImageRegistry"]] = relationship("ImageRegistry", back_populates="system_unit")
+    observation_snapshots: Mapped[List["ObservationSnapshot"]] = relationship("ObservationSnapshot", back_populates="system_unit",cascade="all, delete-orphan")
 
-    # 4. 비즈니스 및 보안
-    subscription: Mapped[Optional["OrganizationSubscription"]] = relationship("OrganizationSubscription", back_populates="system_unit", uselist=False)
-    user_subscription: Mapped[Optional["UserSubscription"]] = relationship("UserSubscription", back_populates="system_unit", uselist=False)
+    # 4. 비즈니스 가드레일
+    subscription: Mapped[Optional["OrganizationSubscription"]] = relationship(
+        "OrganizationSubscription", back_populates="system_unit", uselist=False
+    )
+    user_subscription: Mapped[Optional["UserSubscription"]] = relationship(
+        "UserSubscription", back_populates="system_unit", uselist=False
+    )
     alert_rules: Mapped[List["AlertRule"]] = relationship("AlertRule", back_populates="system_unit")
+
+    def __repr__(self):
+        return f"<SystemUnit(id={self.id}, name={self.name}, status={self.status})>"

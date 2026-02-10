@@ -10,6 +10,7 @@ from app.domains.inter_domain.organizations.organization_query_provider import o
 from app.domains.inter_domain.permissions.permission_query_provider import permission_query_provider # 추가
 from app.core.config import settings
 from app.core.exceptions import PermissionDeniedError, NotFoundError
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class ContextSwitchPolicy(object):
     async def execute(
@@ -51,8 +52,23 @@ class ContextSwitchPolicy(object):
         # 새로운 JWT 클레임에 조직 ID 추가
         data = {"sub": str(current_user.id), "temp_org_id": target_organization_id}
         new_access_token = create_access_token(data, dpop_jkt=dpop_jkt, expires_delta=timedelta(minutes=access_token_expires))
-
-        # 5. UserWithToken 형식으로 반환
+        
+        # 5. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="CONTEXT_SWITCHED",
+            description=f"User {current_user.username} switched context to Org ID: {target_organization_id}",
+            actor_user=current_user,
+            details={
+                "target_org_id": target_organization_id,
+                "previous_org_id": current_user_payload.temp_org_id if hasattr(current_user_payload, 'temp_org_id') else None
+            }
+        )
+        
+        # 6. 트랜잭션 커밋
+        db.commit()
+        
+        # 7. UserWithToken 형식으로 반환
         return UserWithToken(
             user=current_user, # UserWithToken 스키마에 맞는 User 객체
             token={"access_token": new_access_token, "token_type": "bearer"}

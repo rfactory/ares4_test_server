@@ -1,6 +1,8 @@
 import logging
+import uuid
 import hvac
-from typing import Optional, Dict
+import os
+from typing import Optional, Dict, Any, TypedDict
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -9,150 +11,132 @@ from app.domains.inter_domain.audit.audit_command_provider import audit_command_
 
 logger = logging.getLogger(__name__)
 
+class VaultCertData(TypedDict):
+    """IDE가 함수의 반환 구조를 이해할 수 있도록 정의한 타입입니다."""
+    certificate: str
+    private_key: str
+    issuing_ca: str
+    serial_number: str
+
 class VaultCertificateCommandRepository:
     """
-    Vault PKI Secrets Engine과 직접 상호작용하여 인증서를 생성(issue)하거나
-    폐기(revoke)하는 '쓰기' 관련 작업을 담당하는 리포지토리입니다.
-    이 리포지토리의 각 메서드는 중요한 상태 변경을 유발하므로,
-    프로젝트의 아키텍처 패턴에 따라 자체적으로 감사 로그를 기록할 책임을 가집니다.
+    Vault PKI Secrets Engine과 직접 상호작용하여 인증서를 발급/폐기하는 리포지토리입니다.
+    보안 규격(.device.ares4.internal)을 엄격히 준수합니다.
     """
     def __init__(self, settings: Settings):
         self.settings = settings
         self.client = self._init_vault_client()
 
     def _init_vault_client(self) -> hvac.Client:
-        """
-        Vault 클라이언트를 초기화하고, 설정에 명시된 AppRole ID와 Secret ID를 사용하여 인증합니다.
-        성공적으로 인증되면, 클라이언트 토큰이 설정됩니다.
-        실패 시, ConnectionError를 발생시켜 애플리케이션 시작을 중단시킬 수 있습니다.
-        """
-        logger.info(f"Initializing Vault client for command repository at {self.settings.VAULT_ADDR}")
+        """Vault Agent 토큰 우선, AppRole 백업 방식으로 인증합니다."""
         client = hvac.Client(url=self.settings.VAULT_ADDR)
+        token_path = "/app/temp_certs/token.txt"
+        
+        if os.path.exists(token_path):
+            try:
+                with open(token_path, "r") as f:
+                    agent_token = f.read().strip()
+                if agent_token:
+                    client.token = agent_token
+                    logger.info("Command Repository: Authenticated via Vault Agent.")
+                    return client
+            except Exception as e:
+                logger.warning(f"Failed to read Agent token: {e}")
 
         try:
-            role_id = self.settings.VAULT_APPROLE_ROLE_ID
-            secret_id = self.settings.VAULT_APPROLE_SECRET_ID
-
-            if not role_id or not secret_id:
-                raise ValueError("VAULT_APPROLE_ROLE_ID or VAULT_APPROLE_SECRET_ID not set.")
-
-            logger.info("Command Repository attempting AppRole login...")
-            login_response = client.auth.approle.login(role_id=role_id, secret_id=secret_id)
+            login_response = client.auth.approle.login(
+                role_id=self.settings.VAULT_APPROLE_ROLE_ID,
+                secret_id=self.settings.VAULT_APPROLE_SECRET_ID
+            )
             client.token = login_response['auth']['client_token']
-            logger.info("Command Repository Vault client authenticated successfully using AppRole.")
+            logger.info("Command Repository: Authenticated via AppRole.")
+            return client
         except Exception as e:
-            logger.error(f"Command Repository AppRole authentication failed: {e}")
-            raise ConnectionError(f"Command Repository Vault AppRole authentication failed: {e}")
+            logger.error(f"Vault authentication critical failure: {e}")
+            raise ConnectionError(f"Vault Auth Error: {e}")
 
-        return client
-
-    def create_device_certificate(self, db: Session, *, common_name: str, actor_user: Optional[User]) -> Dict:
+    def create_device_certificate(self, db: Session, *, common_name: str, actor_user: Optional[User] = None) -> VaultCertData:
         """
-        주어진 common_name(Device UUID)에 대해 새로운 장치 인증서를 발급하고 감사 로그를 기록합니다.
-
-        Args:
-            db: 감사 로그 기록에 필요한 데이터베이스 세션입니다.
-            common_name: 인증서의 주체 이름(Common Name)으로, 장치의 UUID가 사용됩니다.
-            actor_user: 이 행위를 수행한 사용자 객체입니다. 감사 로그에 기록됩니다.
-
-        Returns:
-            Vault로부터 받은 인증서 데이터(인증서, 개인 키, 시리얼 번호 등)가 포함된 딕셔너리.
+        인자로 받은 common_name(Device UUID)을 사용하여 보안 규격에 맞는 인증서를 발급합니다.
+        상위 계층에서 'common_name'이라는 키워드로 인자를 넘겨주므로 이름을 통일합니다.
         """
-        logger.info(f"Issuing new device certificate for CN='{common_name}'")
+        # ✅ 전달받은 UUID(common_name) 뒤에 보안 도메인을 붙여 최종 CN 구성
+        full_common_name = f"{common_name}.device.ares4.internal"
+        logger.info(f"🚀 Issuing device cert for CN: {full_common_name}")
+        
         try:
-            # 'ares-server-role'은 Vault에 미리 정의된, 장치 인증서 발급 권한을 가진 역할입니다.
             cert_response = self.client.secrets.pki.generate_certificate(
-                mount_point=self.settings.VAULT_PKI_MOUNT_POINT,
-                name="ares-server-role", 
-                common_name=common_name
+                # ✅ 1. mount_point를 반드시 명시 (pki_int)
+                mount_point=self.settings.VAULT_PKI_MOUNT_POINT, 
+                # ✅ 2. env에서 가져온 정확한 Role 이름 사용
+                name=self.settings.VAULT_PKI_LISTENER_ROLE,
+                common_name=full_common_name,
+                extra_params={"ttl": "8760h"}
             )
             
-            # 인증서 발급은 중요한 보안 이벤트이므로, 감사 로그를 기록합니다.
+            cert_data: VaultCertData = cert_response['data']
+            
+            # 감사 로그 기록
             audit_command_provider.log(
                 db=db, 
                 actor_user=actor_user,
                 event_type="DEVICE_CERTIFICATE_CREATED",
-                description=f"Issued new device certificate for CN='{common_name}'.",
+                description=f"Issued device certificate for CN='{full_common_name}'.",
                 details={
-                    "common_name": common_name,
-                    "serial_number": cert_response['data'].get("serial_number"),
-                    "issuing_ca": cert_response['data'].get("issuing_ca"),
+                    "common_name": full_common_name,
+                    "serial_number": cert_data.get("serial_number"),
                 }
             )
-            return cert_response['data']
+            return cert_data
+            
         except Exception as e:
-            logger.error(f"Failed to issue device certificate for CN='{common_name}': {e}", exc_info=True)
+            logger.error(f"💥 Failed to issue cert for {full_common_name}: {e}")
             raise
 
-    def issue_server_mqtt_cert(self, db: Session, *, actor_user: Optional[User] = None) -> Dict:
-        """
-        서버 자신(MQTT 클라이언트)을 위한 새로운 인증서를 발급하고 감사 로그를 기록합니다.
-        
-        Args:
-            db: 감사 로그 기록에 필요한 데이터베이스 세션입니다.
-            actor_user: 이 행위를 수행한 사용자 객체. 시스템 자체의 행위일 경우 None일 수 있습니다.
-
-        Returns:
-            Vault로부터 받은 인증서 데이터(인증서, 개인 키, 시리얼 번호 등)가 포함된 딕셔너리.
-        """
-        common_name = self.settings.MQTT_CLIENT_ID
+    def issue_server_mqtt_cert(self, db: Session, *, actor_user: Optional[User] = None) -> Dict[str, Any]:
+        """서버용 MQTT 클라이언트 인증서를 발급합니다."""
+        common_name = self.settings.MQTT_CLIENT_ID 
         try:
-            # 'ares-server-mqtt-client-role'은 서버 MQTT 클라이언트를 위해 특별히 정의된 역할입니다.
             cert_response = self.client.secrets.pki.generate_certificate(
                 mount_point=self.settings.VAULT_PKI_MOUNT_POINT,
                 name="ares-server-mqtt-client-role", 
                 common_name=common_name
             )
 
-            # 서버의 핵심 보안 자격 증명이 생성되는 것이므로, 감사 로그를 기록합니다.
             audit_command_provider.log(
                 db=db,
                 actor_user=actor_user,
                 event_type="SERVER_MQTT_CERTIFICATE_ISSUED",
-                description=f"Issued new server MQTT client certificate for CN='{common_name}'.",
+                description=f"Issued server MQTT cert for CN='{common_name}'.",
                 details={
                     "common_name": common_name,
                     "serial_number": cert_response['data'].get("serial_number"),
-                    "issuing_ca": cert_response['data'].get("issuing_ca"),
                 }
             )
             return cert_response['data']
         except Exception as e:
-            logger.error(f"Failed to issue server MQTT client certificate for CN='{common_name}': {e}", exc_info=True)
+            logger.error(f"Failed to issue server cert: {e}")
             raise
 
     def revoke_certificate(self, db: Session, *, serial_number: str, actor_user: Optional[User]) -> bool:
-        """
-        주어진 시리얼 번호에 해당하는 인증서를 Vault에서 폐기(revoke)하고 감사 로그를 기록합니다.
-
-        Args:
-            db: 감사 로그 기록에 필요한 데이터베이스 세션입니다.
-            serial_number: 폐기할 인증서의 고유 시리얼 번호입니다.
-            actor_user: 이 행위를 수행한 사용자 객체입니다.
-
-        Returns:
-            폐기가 성공적으로 처리되었는지 여부를 나타내는 boolean 값.
-        """
-        logger.info(f"Revoking certificate with serial number: {serial_number}")
+        """인증서 폐기"""
         try:
-            revoke_response = self.client.secrets.pki.revoke_certificate(
+            self.client.secrets.pki.revoke_certificate(
                 mount_point=self.settings.VAULT_PKI_MOUNT_POINT,
                 serial_number=serial_number
             )
-            
-            # 인증서 폐기는 매우 중요한 보안 이벤트이므로, 반드시 감사 로그를 기록합니다.
             audit_command_provider.log(
                 db=db, 
                 actor_user=actor_user,
                 event_type="CERTIFICATE_REVOKED",
-                description=f"Revoked certificate with serial number: {serial_number}.",
+                description=f"Revoked cert: {serial_number}.",
                 details={ "serial_number": serial_number }
             )
-            return revoke_response is not None and 'revocation_time' in revoke_response.get('data', {})
+            return True
         except Exception as e:
-            logger.error(f"Failed to revoke certificate with serial number {serial_number}: {e}", exc_info=True)
+            logger.error(f"Failed to revoke cert {serial_number}: {e}")
             raise
 
-# --- Singleton Instance ---
-app_settings = Settings()
+# 싱글톤 인스턴스
+from app.core.config import settings as app_settings
 vault_certificate_command_repository = VaultCertificateCommandRepository(settings=app_settings)

@@ -23,6 +23,8 @@ from app.domains.inter_domain.user_identity.user_identity_command_provider impor
 from app.domains.inter_domain.send_email.send_email_command_provider import send_email_command_provider
 from app.domains.inter_domain.registration_cache.registration_cache_command_provider import registration_cache_command_provider
 
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
+
 class InitiateRegistrationPolicy:
     async def execute(self, db: Session, *, user_in: UserCreate):
         """
@@ -69,7 +71,19 @@ class InitiateRegistrationPolicy:
             context={"verification_code": verification_code}
         )
         await send_email_command_provider.send_email(email_data=email_data)
-
+        
+        # 5. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="REGISTRATION_STARTED",
+            description=f"Registration initiated for email: {user_in.email}",
+            actor_user=None, # 아직 가입 전이므로 행위자 없음
+            details={"email": user_in.email}
+        )
+        
+        # 6. 트랜잭션 커밋
+        db.commit()
+        
         return {"message": "Verification code sent to email."}
 
 initiate_registration_policy = InitiateRegistrationPolicy()

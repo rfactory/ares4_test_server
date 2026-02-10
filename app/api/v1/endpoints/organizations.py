@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Tuple, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -41,7 +41,7 @@ async def search_organizations(
     db: Session = Depends(get_db),
     user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user),
     search_term: str = Query(..., min_length=1),
-    _permission: None = Depends(PermissionChecker("organizations:read")) # 모든 스태프가 조직을 검색할 수 있도록 함
+    _permission: None = Depends(PermissionChecker("organizations:read"))
 ):
     """
     조직 이름 또는 사업자 등록 번호로 조직을 검색합니다.
@@ -76,28 +76,23 @@ async def create_organization(
 ):
     """
     새로운 조직을 생성합니다.
+    (Ares Aegis: 트랜잭션 확정 및 감사 로그는 Policy 내부에서 처리됨)
     """
     current_user, _, _ = user_info
     try:
+        # Policy가 비즈니스 로직, 감사 로그, db.commit()을 완결합니다.
         new_org = create_organization_policy_provider.execute(
             db, org_in=org_in, actor_user=current_user
         )
-        db.commit()
-        db.refresh(new_org)
         return new_org
     except PermissionDeniedError as e:
-        db.rollback()
         raise HTTPException(status_code=403, detail=str(e))
     except DuplicateEntryError as e:
-        db.rollback()
         raise HTTPException(status_code=409, detail=str(e))
-    except NotFoundError as e:
-        db.rollback()
+    except (NotFoundError, AppLogicError) as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
-
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 @router.get("/{organization_id}/members", response_model=List[MemberResponse])
 async def read_organization_members(
@@ -112,7 +107,7 @@ async def read_organization_members(
     current_user, _, _ = user_info
     members = user_identity_query_provider.get_members_by_organization(db=db, organization_id=organization_id)
     if not members:
-        raise HTTPException(status_code=404, detail="No members found for this organization or organization not found")
+        raise HTTPException(status_code=404, detail="No members found or organization not found")
     return members
 
 @router.delete("/{organization_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -122,21 +117,21 @@ async def remove_organization_member(
     db: Session = Depends(get_db),
     user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user)
 ):
-    """조직에서 구성원을 제거합니다."""
+    """
+    조직에서 구성원을 제거합니다.
+    """
     current_user, _, _ = user_info
     try:
+        # Policy 내부에서 트랜잭션 완결
         manage_organization_member_policy_provider.remove(
             db, actor_user=current_user, organization_id=organization_id, user_to_remove_id=user_id
         )
     except (PermissionDeniedError, ForbiddenError) as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except NotFoundError as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")
 
 @router.put("/{organization_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_organization_member_role(
@@ -146,18 +141,18 @@ async def update_organization_member_role(
     db: Session = Depends(get_db),
     user_info: Tuple[User, str, Optional[str]] = Depends(get_current_user)
 ):
-    """조직 구성원의 역할을 변경합니다."""
+    """
+    조직 구성원의 역할을 변경합니다.
+    """
     current_user, _, _ = user_info
     try:
+        # Policy 내부에서 트랜잭션 완결
         manage_organization_member_policy_provider.update_role(
             db, actor_user=current_user, organization_id=organization_id, user_to_update_id=user_id, new_role_id=request.new_role_id
         )
     except (PermissionDeniedError, ForbiddenError) as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except (NotFoundError, AppLogicError) as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {e}")

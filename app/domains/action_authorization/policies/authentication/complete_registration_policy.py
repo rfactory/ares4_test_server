@@ -9,6 +9,7 @@ from app.domains.inter_domain.registration_cache.registration_cache_query_provid
 from app.domains.inter_domain.registration_cache.registration_cache_command_provider import registration_cache_command_provider
 from app.domains.inter_domain.user_identity.user_identity_command_provider import user_identity_command_provider
 from app.domains.inter_domain.token_management.token_management_command_provider import token_management_command_provider
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class CompleteRegistrationPolicy:
     async def execute(self, db: Session, *, verification_code: str, email: str, request: Request) -> dict:
@@ -37,7 +38,19 @@ class CompleteRegistrationPolicy:
 
         # 6. 토큰 발급 (즉시 로그인, DPoP jkt 포함)
         token_pair = token_management_command_provider.issue_token_pair(db, user=new_user, dpop_jkt=dpop_jkt)
-
+        
+        # 7. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="USER_REGISTERED",
+            description=f"User registration completed for {new_user.email}",
+            actor_user=new_user,
+            details={"user_id": new_user.id, "email": new_user.email}
+        )
+        
+        # 8. 트랜잭션 커밋
+        db.commit()
+        
         return {"user": new_user.as_dict(), "token": token_pair}
 
 complete_registration_policy = CompleteRegistrationPolicy()

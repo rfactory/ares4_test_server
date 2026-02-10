@@ -93,9 +93,16 @@ class MqttListenerManager:
         if rc == 0:
             self.is_connected = True
             logger.info(f"MQTT Listener '{self.client_id}' connected successfully.")
-            client.subscribe("telemetry/#", qos=1)
+            
+            # 1. 명령 및 상태 요청
             client.subscribe("client/request_state/#", qos=1)
-            logger.info(f"MQTT Listener subscribed to telemetry/# and client/request_state/#")
+            client.subscribe("commands/response/#", qos=1)
+            
+            # 2. [부활!] 실시간 모니터링(Frontend용 Redis 캐싱)을 위해 텔레메트리도 듣습니다.
+            # 부하 걱정 NO! Redis 저장은 매우 빠릅니다.
+            client.subscribe("ares4/+/telemetry", qos=1)
+            
+            logger.info(f"📡 MQTT Listener subscribed to Commands AND Telemetry (Hot Path for Redis).")
         else:
             self.is_connected = False
             logger.error(f"MQTT Listener '{self.client_id}' failed to connect, return code {rc}")

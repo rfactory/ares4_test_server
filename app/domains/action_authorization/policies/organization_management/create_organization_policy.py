@@ -10,6 +10,7 @@ from app.domains.inter_domain.organizations.organization_command_provider import
 # 역할 생성을 위한 임포트 추가
 from app.domains.inter_domain.role_management.role_command_provider import role_command_provider
 from app.domains.inter_domain.role_management.schemas.role_command import RoleCreate
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class CreateOrganizationPolicy:
     def execute(
@@ -39,9 +40,7 @@ class CreateOrganizationPolicy:
             raise NotFoundError("OrganizationType", str(org_in.organization_type_id))
 
         # 2. 조직 생성 실행
-        new_org = organization_command_provider.create_organization(
-            db, org_in=org_in, actor_user=actor_user
-        )
+        new_org = organization_command_provider.create_organization(db, org_in=org_in, actor_user=actor_user)
 
         # 3. 해당 조직의 기본 Admin 역할 생성 (tier=1, max_headcount=2)
         admin_role_schema = RoleCreate(
@@ -53,7 +52,23 @@ class CreateOrganizationPolicy:
             max_headcount=2
         )
         role_command_provider.create_role(db, role_in=admin_role_schema, actor_user=actor_user)
-
+        
+        # 4. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="ORGANIZATION_CREATED",
+            description=f"New organization '{new_org.company_name}' created by {actor_user.username}",
+            actor_user=actor_user,
+            details={
+                "org_id": new_org.id,
+                "org_name": new_org.company_name,
+                "business_number": org_in.business_registration_number
+            }
+        )
+        
+        # 5. 최종 트랜잭션 커밋(조직 + 역할 + 로그 일괄 확정)
+        db.commit()
+        
         return new_org
 
 create_organization_policy = CreateOrganizationPolicy()

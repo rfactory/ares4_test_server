@@ -8,6 +8,7 @@ from app.domains.inter_domain.organizations.organization_query_provider import o
 from app.domains.inter_domain.role_management.role_query_provider import role_query_provider
 from app.domains.services.access_requests.schemas.access_request_command import AccessRequestCreate
 from app.domains.services.access_requests.services.access_request_command_service import access_request_command_service
+from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 
 class CreateJoinRequestPolicy:
     def execute(
@@ -39,11 +40,30 @@ class CreateJoinRequestPolicy:
             organization_id=org.id,
             user_id=requester_user.id
         )
-        access_request_command_service.create_access_request(
-            db, request_in=request_in, user_id=requester_user.id, actor_user=requester_user
+        created_request = access_request_command_service.create_access_request(
+            db, 
+            request_in=request_in, 
+            user_id=requester_user.id, 
+            actor_user=requester_user,
+            type="pull",  # 사용자가 직접 요청하므로 'pull' 방식
+            initiated_by_user_id=requester_user.id  # 요청 주체는 사용자 본인
         )
-
-        # 4. 트랜잭션 커밋
+        
+        # 4. 감사 로그 기록
+        audit_command_provider.log(
+            db=db,
+            event_type="JOIN_REQUEST_CREATED",
+            description=f"User {requester_user.username} requested to join organization {org.company_name}",
+            actor_user=requester_user,
+            details={
+                "organization_id": org.id,
+                "requested_role_id": admin_role.id,
+                "reason": reason,
+                "access_request_id": created_request.id
+            }
+        )
+        
+        # 5. 트랜잭션 커밋
         db.commit()
 
 create_join_request_policy = CreateJoinRequestPolicy()

@@ -11,6 +11,7 @@ from app.core.security import get_password_hash
 from app.models.objects.user import User
 from app.models.objects.role import Role
 from app.models.objects.permission import Permission
+from app.models.objects.organization import Organization  # 추가된 임포트
 from app.models.objects.organization_type import OrganizationType
 from app.models.relationships.role_permission import RolePermission
 from app.models.relationships.user_organization_role import UserOrganizationRole
@@ -70,8 +71,10 @@ async def create_initial_data():
         org_type = db.query(OrganizationType).filter(OrganizationType.name == org_type_name).first()
         if not org_type:
             print(f"Creating organization type: '{org_type_name}'...")
-            db.add(OrganizationType(name=org_type_name, description="A standard corporate entity."))
+            org_type = OrganizationType(name=org_type_name, description="A standard corporate entity.")
+            db.add(org_type)
             db.commit()
+            db.refresh(org_type)
 
         # 2. 필수 권한 시딩
         print("Seeding essential permissions...")
@@ -111,7 +114,15 @@ async def create_initial_data():
             role = db.query(Role).filter(Role.name == role_name, Role.scope == 'SYSTEM').first()
             if not role:
                 print(f"Role '{role_name}' not found. Creating it...")
-                role = Role(name=role_name, description=f"{role_name} for the system", scope='SYSTEM', tier=0, max_headcount=config['max_headcount'])
+                # organization_id=system_org.id를 반드시 포함하여 생성
+                role = Role(
+                    name=role_name, 
+                    description=f"{role_name} for the system", 
+                    scope='SYSTEM', 
+                    tier=0, 
+                    max_headcount=config['max_headcount'],
+                    organization_id=None
+                )
                 db.add(role)
                 db.commit()
                 db.refresh(role)
@@ -153,8 +164,7 @@ async def create_initial_data():
         # 4. 거버넌스 규칙 시딩 (T0 규칙)
         print("Seeding governance rules...")
         governance_rules = [
-
-            # 규칙 2: System_Admin의 Prime_Admin 선임/해임 (일반 상황)
+            # 규칙 2: System_Admin의 Prime_Admin 선임/해임
             GovernanceRuleCreate(
                 rule_name="SystemAdminCanAssignPrimeAdmin",
                 description=f"System_Admin은 Prime_Admin 수가 {MAX_PRIME_ADMIN}명 미만일 때 Prime_Admin 역할을 부여할 수 있습니다.",
@@ -195,12 +205,12 @@ async def create_initial_data():
                 context="SYSTEM",
                 allow=False, priority=10
             ),
-            # 규칙 4: Prime_Admin의 시스템 내 일반 역할 관리 (`tier > 1`, `scope=SYSTEM`)
+            # 규칙 4: Prime_Admin의 시스템 내 일반 역할 관리
             GovernanceRuleCreate(
                 rule_name="PrimeAdminCanManageSystemTier2PlusRoles",
                 description="Prime_Admin은 시스템 컨텍스트에서 tier가 1보다 큰 시스템 역할을 할당/해제할 수 있습니다.",
                 actor_role_id=roles_in_db["Prime_Admin"].id,
-                action="assign_role", # 이 규칙은 assign과 revoke 모두에 적용될 수 있도록 validator에서 처리
+                action="assign_role",
                 context="SYSTEM", 
                 allow=True, priority=100,
                 conditions={"target_role_tier": {"$gt": 1}, "target_role_scope": "SYSTEM"}
@@ -214,14 +224,12 @@ async def create_initial_data():
                 allow=True, priority=100,
                 conditions={"target_role_tier": {"$gt": 1}, "target_role_scope": "SYSTEM"}
             ),
-
-
-             # 규칙 7: 비상 모드 시 System_Admin에게 Prime_Admin 권한 대리 위임
+            # 규칙 7: 비상 모드 시 System_Admin에게 Prime_Admin 권한 대리 위임
             GovernanceRuleCreate(
                 rule_name="SystemAdminDelegatedAsPrimeInEmergency",
                 description="비상 모드에서 System_Admin은 Prime_Admin의 모든 권한을 위임받습니다.",
                 actor_role_id=roles_in_db["System_Admin"].id,
-                action="delegate_prime_admin_powers", # 이 액션은 evaluate_rule에서 특별 처리
+                action="delegate_prime_admin_powers",
                 context="SYSTEM",
                 allow=True, priority=5,
                 conditions={"is_emergency_mode": True}
@@ -229,9 +237,8 @@ async def create_initial_data():
         ]
 
         for rule_in in governance_rules:
-            # OrgAdminCanAssignOrgAdmin 규칙은 조직 생성 시 동적으로 처리해야 하므로 여기서는 건너뜁니다.
             if rule_in.rule_name == "OrgAdminCanAssignOrgAdmin":
-                print("Skipping OrgAdminCanAssignOrgAdmin rule seeding. It should be created on organization creation.")
+                print("Skipping OrgAdminCanAssignOrgAdmin rule seeding.")
                 continue
 
             rule = governance_rule_crud.get_by_rule_name(db, rule_name=rule_in.rule_name)
@@ -262,12 +269,19 @@ async def create_initial_data():
             db.commit()
             db.refresh(user)
 
-        # 6. 사용자에게 System_Admin 역할 연결
+        # 6. 사용자에게 System_Admin 역할 연결 (organization_id 부여)
         system_admin_role = roles_in_db["System_Admin"]
-        assignment = db.query(UserOrganizationRole).filter(UserOrganizationRole.user_id == user.id, UserOrganizationRole.role_id == system_admin_role.id).first()
+        assignment = db.query(UserOrganizationRole).filter(
+            UserOrganizationRole.user_id == user.id, 
+            UserOrganizationRole.role_id == system_admin_role.id
+        ).first()
         if not assignment:
             print(f"Assigning 'System_Admin' role to user '{admin_username}'...")
-            assignment = UserOrganizationRole(user_id=user.id, role_id=system_admin_role.id, organization_id=None)
+            assignment = UserOrganizationRole(
+                user_id=user.id, 
+                role_id=system_admin_role.id, 
+                organization_id=None
+            )
             db.add(assignment)
             db.commit()
 
@@ -291,12 +305,19 @@ async def create_initial_data():
             db.commit()
             db.refresh(prime_user)
 
-        # 8. 사용자에게 Prime_Admin 역할 연결
+        # 8. 사용자에게 Prime_Admin 역할 연결 (organization_id 부여)
         prime_admin_role = roles_in_db["Prime_Admin"]
-        prime_assignment = db.query(UserOrganizationRole).filter(UserOrganizationRole.user_id == prime_user.id, UserOrganizationRole.role_id == prime_admin_role.id).first()
+        prime_assignment = db.query(UserOrganizationRole).filter(
+            UserOrganizationRole.user_id == prime_user.id, 
+            UserOrganizationRole.role_id == prime_admin_role.id
+        ).first()
         if not prime_assignment:
             print(f"Assigning 'Prime_Admin' role to user '{prime_admin_username}'...")
-            prime_assignment = UserOrganizationRole(user_id=prime_user.id, role_id=prime_admin_role.id, organization_id=None)
+            prime_assignment = UserOrganizationRole(
+                user_id=prime_user.id, 
+                role_id=prime_admin_role.id, 
+                organization_id=None
+            )
             db.add(prime_assignment)
             db.commit()
 

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Tuple, Optional
 
 # inter_domain Provider를 통해 접근 요청 정보를 조회합니다.
-from app.domains.inter_domain.access_requests.access_requests_query_provider import access_request_query_providers
+from app.domains.inter_domain.access_requests.access_requests_query_provider import access_request_query_provider
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class DuplicatePermissionRequestValidator:
         """
         한 사용자가 특정 조직에 대해 보류 중인(pending) 접근 요청을 이미 가지고 있는지 확인합니다.
         """
-        existing_request = access_request_query_providers.get_pending_access_request_by_user_org(
+        existing_request = access_request_query_provider.get_pending_access_request_by_user_org(
             db,
             user_id=user_id,
             organization_id=organization_id

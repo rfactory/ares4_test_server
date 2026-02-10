@@ -1,5 +1,6 @@
 import logging
 import hvac
+import os # [추가] 파일 존재 여부 확인용
 from typing import Optional, List, Dict
 from datetime import datetime
 
@@ -11,8 +12,6 @@ class VaultCertificateQueryRepository:
     """
     Vault PKI Secrets Engine과 직접 상호작용하여 인증서 정보를 조회(read)하는
     '읽기' 관련 작업을 담당하는 리포지토리입니다.
-    민감한 인증서 정보를 조회하는 작업 또한 중요한 보안 이벤트이므로,
-    프로젝트의 아키텍처 패턴에 따라 자체적으로 감사 로그를 기록할 책임을 가집니다.
     """
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -20,13 +19,27 @@ class VaultCertificateQueryRepository:
 
     def _init_vault_client(self) -> hvac.Client:
         """
-        Vault 클라이언트를 초기화하고, 설정에 명시된 AppRole ID와 Secret ID를 사용하여 인증합니다.
-        성공적으로 인증되면, 클라이언트 토큰이 설정됩니다.
-        실패 시, ConnectionError를 발생시켜 애플리케이션 시작을 중단시킬 수 있습니다.
+        Vault 클라이언트를 초기화합니다.
+        우선적으로 Vault Agent가 배달한 토큰 파일을 사용하고, 실패 시 AppRole 인증을 시도합니다.
         """
         logger.info(f"Initializing Vault client for query repository at {self.settings.VAULT_ADDR}")
         client = hvac.Client(url=self.settings.VAULT_ADDR)
 
+        # 1. [핵심] 비서(Agent)가 두고 간 토큰 파일 확인
+        token_path = "/app/temp_certs/token.txt"
+        
+        if os.path.exists(token_path):
+            try:
+                with open(token_path, "r") as f:
+                    agent_token = f.read().strip()
+                if agent_token:
+                    client.token = agent_token
+                    logger.info("Query Repository: Authenticated using Vault Agent token file.")
+                    return client
+            except Exception as e:
+                logger.warning(f"Failed to read Agent token file in Query Repo: {e}")
+
+        # 2. [백업] 파일이 없으면 기존 AppRole 방식으로 시도
         try:
             role_id = self.settings.VAULT_APPROLE_ROLE_ID
             secret_id = self.settings.VAULT_APPROLE_SECRET_ID
@@ -34,10 +47,11 @@ class VaultCertificateQueryRepository:
             if not role_id or not secret_id:
                 raise ValueError("VAULT_APPROLE_ROLE_ID or VAULT_APPROLE_SECRET_ID not set.")
 
-            logger.info("Query Repository attempting AppRole login...")
+            logger.info("Query Repository attempting AppRole login (Fallback)...")
             login_response = client.auth.approle.login(role_id=role_id, secret_id=secret_id)
             client.token = login_response['auth']['client_token']
             logger.info("Query Repository Vault client authenticated successfully using AppRole.")
+            
         except Exception as e:
             logger.error(f"Query Repository AppRole authentication failed: {e}")
             raise ConnectionError(f"Query Repository Vault AppRole authentication failed: {e}")
@@ -59,7 +73,7 @@ class VaultCertificateQueryRepository:
         try:
             read_response = self.client.secrets.pki.read_certificate(
                 mount_point=self.settings.VAULT_PKI_MOUNT_POINT,
-                serial_number=serial_number
+                serial=serial_number
             )
             return read_response['data'] if read_response and read_response['data'] else None
         except hvac.exceptions.VaultError as ve:
@@ -75,20 +89,9 @@ class VaultCertificateQueryRepository:
     def list_certificates_by_role(self, role_name: str) -> List[str]:
         """
         특정 역할(role_name)로 발급된 모든 인증서의 시리얼 번호 목록을 Vault에서 조회합니다.
-        주의: Vault의 list_certificates API는 mount_point에 발급된 모든 시리얼을 반환하므로,
-        실제 역할별 필터링은 호출하는 쪽에서 처리해야 할 수 있습니다.
-
-        Args:
-            role_name: 조회할 인증서 역할의 이름입니다.
-
-        Returns:
-            해당 역할로 발급된 인증서 시리얼 번호 목록.
         """
         logger.debug(f"Listing certificates for role: {role_name}")
         try:
-            # list_certificates API는 특정 역할로 필터링하는 기능을 직접 제공하지 않습니다.
-            # 여기서는 mount_point에 발급된 모든 인증서 시리얼을 가져옵니다.
-            # 역할별 필터링이 필요하면, 서비스 계층에서 추가 로직이 필요합니다.
             list_response = self.client.secrets.pki.list_certificates(
                 mount_point=self.settings.VAULT_PKI_MOUNT_POINT,
             )
@@ -100,9 +103,6 @@ class VaultCertificateQueryRepository:
     def get_crl(self) -> str:
         """
         Vault의 현재 유효한 인증서 폐기 목록(CRL)을 PEM 형식 문자열로 가져옵니다.
-
-        Returns:
-            PEM 형식의 CRL 문자열.
         """
         logger.debug("Getting CRL from Vault")
         try:
@@ -116,17 +116,9 @@ class VaultCertificateQueryRepository:
 
     def get_valid_server_certificate(self) -> Optional[Dict]:
         """
-        현재 Vault에 발급된 서버 MQTT 클라이언트 인증서 중 유효하고
-        폐기되지 않은 가장 최근의 인증서 정보를 조회합니다.
-        주의: Vault PKI API는 특정 CN/Role로 발급된 인증서를 직접 조회하는 기능을 제공하지 않습니다.
-        따라서 모든 인증서를 읽어서 필터링하는 방식은 비효율적일 수 있습니다.
-        이 메서드는 주로 'Query' 목적으로 Vault에 등록된 모든 인증서를 대상으로 하므로,
-        이름이 아닌 시리얼 번호를 기준으로 상세 조회하는 것이 일반적입니다.
-        하지만, 여기서는 '현재 유효한 서버 인증서'를 찾는 목적이므로, 
-        list -> read -> filter 과정을 거쳐야 합니다. 현재로서는 구현하지 않고 Placeholder로 둡니다.
+        현재 Vault에 발급된 서버 MQTT 클라이언트 인증서 중 유효한 것을 조회합니다. (Placeholder)
         """
         logger.warning("get_valid_server_certificate method is a placeholder and not fully implemented yet.")
-        # Placeholder implementation - needs actual logic to list, read, and filter
         return None
 
 # --- Singleton Instance ---

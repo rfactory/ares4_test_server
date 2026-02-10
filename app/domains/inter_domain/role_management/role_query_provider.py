@@ -2,7 +2,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 # 서비스는 절대 경로로 import (마이크로서비스 분리 가능성)
-from app.domains.services.role_management.services.role_query_service import role_query_service
+from app.domains.services.role_management.services.role_query_service import role_query_service, RoleQueryService
 from app.models.objects.user import User
 from app.models.objects.role import Role # Role 모델 임포트 추가
 
@@ -10,6 +10,8 @@ from app.models.objects.role import Role # Role 모델 임포트 추가
 from .schemas.role_query import RoleResponse, RolePermissionResponse
 
 class RoleQueryProvider:
+    def get_service(self) -> RoleQueryService:
+        return role_query_service
     def get_role(self, db: Session, *, role_id: int) -> Optional[Role]:
         """ID로 단일 역할을 조회합니다. 서비스의 결과를 그대로 반환합니다."""
         return role_query_service.get_role(db, role_id=role_id)

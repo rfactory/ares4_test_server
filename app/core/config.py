@@ -38,7 +38,13 @@ class Settings(BaseSettings):
     MQTT_CLIENT_KEY: Optional[str] = None
     MQTT_TLS_ENABLED: bool = True
     MQTT_TLS_INSECURE: bool = False
-
+    
+    # --- EMQX Webhook Settings ---
+    EMQX_WEBHOOK_SECRET: str
+    
+    # --- Storage Settings ---
+    UPLOAD_DIR: str = "/app/uploads"
+    
     # --- Vault Settings ---
     VAULT_ADDR: str
     VAULT_APPROLE_ROLE_ID: Optional[str] = None
@@ -60,12 +66,20 @@ class Settings(BaseSettings):
     MAIL_SERVER: str
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
-
-    # --- Invitation Settings ---
+    
+    # --- Storage Settings ---
+    UPLOAD_DIR: str = "/app/uploads"
+    
+        # --- Invitation Settings ---
     INVITATION_EXPIRATION_HOURS: int = 24
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8', extra='ignore', secrets_dir='/run/secrets') # env_file 추가
-
+    model_config = SettingsConfigDict(
+        env_file=[".env", "../shared_config/.env"],
+        env_file_encoding='utf-8',
+        extra='ignore',
+        secrets_dir='/run/secrets'
+        ) # env_file 추가
+    
 @lru_cache
 def get_settings() -> Settings:
     return Settings() # type: ignore[call-arg]

@@ -57,17 +57,13 @@ class AccessRequestCommandService:
         self,
         db: Session,
         *,
-        request_id: int, 
+        db_obj: AccessRequest,
         update_in: AccessRequestUpdate,
         admin_user: DBUser
     ) -> AccessRequest:
         """
         접근 요청의 상태를 업데이트하고 감사 로그를 기록합니다.
         """
-        db_obj = access_request_crud_command.get(db, id=request_id)
-        if not db_obj:
-            raise NotFoundError(resource_name="AccessRequest", resource_id=str(request_id))
-        
         old_value = db_obj.as_dict()
 
         updated_obj = access_request_crud_command.update(db, db_obj=db_obj, obj_in=update_in)

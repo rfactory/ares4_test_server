@@ -4,6 +4,7 @@ from typing import List
 from app.core.exceptions import DuplicateEntryError, NotFoundError
 from app.models.objects.role import Role
 from app.models.objects.user import User
+from app.models.relationships.user_organization_role import UserOrganizationRole
 from ..crud.role_command_crud import role_command_crud
 from ..crud.role_query_crud import role_query_crud
 from ..crud.role_permission_command_crud import role_permission_command_crud
@@ -77,6 +78,30 @@ class RoleCommandService:
             db=db, event_type="ROLE_PERMISSIONS_UPDATED", actor_user=actor_user,
             description=f"Permissions for role ID {role_id} updated.",
             details={"role_id": role_id, "new_permission_count": len(permissions_in)}
+        )
+    def remove_member_from_organization(self, db: Session, *, organization_id: int, user_id: int, actor_user: User):
+        """조직에서 사용자의 역할 할당을 제거합니다."""
+        # 1. 해당 조직에 대한 사용자의 역할 할당 찾기
+        assignment = db.query(UserOrganizationRole).filter(
+            UserOrganizationRole.organization_id == organization_id,
+            UserOrganizationRole.user_id == user_id
+        ).first()
+
+        if not assignment:
+            raise NotFoundError("UserOrganizationRole", f"org={organization_id}, user={user_id}")
+
+        # 2. 삭제 수행
+        deleted_data = assignment.as_dict() if hasattr(assignment, 'as_dict') else str(assignment)
+        db.delete(assignment)
+        db.flush()
+
+        # 3. 감사 로그
+        audit_command_provider.log(
+            db=db, 
+            event_type="ORGANIZATION_MEMBER_REMOVED", 
+            actor_user=actor_user,
+            description=f"User {user_id} removed from Organization {organization_id}.",
+            details={"organization_id": organization_id, "target_user_id": user_id, "deleted_data": deleted_data}
         )
 
 role_command_service = RoleCommandService()

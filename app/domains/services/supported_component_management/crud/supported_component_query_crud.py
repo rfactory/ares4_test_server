@@ -9,7 +9,7 @@ from ..schemas.supported_component_query import SupportedComponentRead # Query �
 class CRUDSupportedComponentQuery(CRUDBase[SupportedComponent, None, None]): # Command 스키마는 사용하지 않음
     def get_by_component_type(self, db: Session, *, component_type: str) -> Optional[SupportedComponent]:
         """컴포넌트 타입으로 특정 지원 부품을 조회합니다."""
-        return db.query(self.model).filter(self.model.component_type == component_type).first()
+        return db.query(self.model).filter(self.model.category == component_type).first()
 
     def get_multi(
         self, db: Session, *, skip: int = 0, limit: int = 100

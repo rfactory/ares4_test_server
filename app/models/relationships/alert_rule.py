@@ -1,45 +1,71 @@
+import enum
 from sqlalchemy import BigInteger, String, Text, JSON, Boolean, Enum, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 from app.database import Base
 from ..base_model import TimestampMixin, UserFKMixin
 
+if TYPE_CHECKING:
+    from app.models.objects.system_unit import SystemUnit
+    from app.models.objects.device import Device
+    from app.models.objects.user import User
+    from app.models.events_logs.alert_event import AlertEvent
+
+# 1. 알림 심각도 관리를 위한 Enum
+class AlertSeverity(str, enum.Enum):
+    LOW = 'LOW'
+    MEDIUM = 'MEDIUM'
+    HIGH = 'HIGH'
+    CRITICAL = 'CRITICAL'
+
 class AlertRule(Base, TimestampMixin, UserFKMixin):
     """
-    [Object] 알림 규칙 모델입니다.
-    개별 라즈베리파이가 아닌 'SystemUnit(클러스터)' 단위를 기본 감시 대상으로 하며, 
-    강화학습 모델이 유닛 전체의 상태를 분석하여 알림을 발생시키는 기준이 됩니다.
+    [Object] 알림 규칙 모델:
+    SystemUnit 전체의 상태를 감시하며, 설정된 임계치나 RL 모델의 판단에 따라 알림을 발생시킵니다.
     """
     __tablename__ = "alert_rules"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     
-    # --- 핵심: 클러스터(SystemUnit) 중심 연결 ---
-    # 사용자가 관리하는 '전체적인 관점'의 알림 대상입니다.
-    system_unit_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('system_units.id'), nullable=False, index=True)
+    # --- 감시 대상 ---
+    # 클러스터(SystemUnit) 단위 감시
+    system_unit_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey('system_units.id'), nullable=False, index=True
+    )
     
-    # "특별한 일"이 있을 때만 특정 장치를 타겟팅할 수 있도록 Nullable로 유지합니다.
-    device_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('devices.id'), nullable=True, index=True)
+    # 특정 장치 타겟팅 (선택 사항)
+    device_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey('devices.id'), nullable=True, index=True
+    )
     
-    # user_id는 UserFKMixin으로부터 상속받습니다. (BigInteger)
-
-    name: Mapped[str] = mapped_column(String(100), nullable=False) # 알림 규칙 이름
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 알림 규칙 설명
+    # 규칙 정보
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
-    # 알림 발생 조건 (JSON 형식)
-    # 예: {'target': 'cluster_avg', 'metric': 'temp', 'operator': '>', 'value': 35}
+    # 2. 로직 및 채널 (JSON/JSONB 활용)
+    # 조건 예: {"logic": "and", "rules": [{"metric": "cpu_load", "op": ">", "val": 90}]}
     condition: Mapped[dict] = mapped_column(JSON, nullable=False) 
     
-    # 알림의 심각도
-    severity: Mapped[str] = mapped_column(Enum('LOW', 'MEDIUM', 'HIGH', 'CRITICAL', name='alert_severity'), default='MEDIUM', nullable=False)
+    severity: Mapped[AlertSeverity] = mapped_column(
+        Enum(AlertSeverity, name='alert_severity', create_type=False), 
+        default=AlertSeverity.MEDIUM, 
+        nullable=False
+    )
     
-    # 알림 전송 채널 (JSON 형식)
+    # 알림 전송 설정 (Slack, Email, Push 등)
     notification_channels: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) 
     
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False) # 활성화 여부
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # --- Relationships ---
-    system_unit = relationship("SystemUnit", back_populates="alert_rules")
-    device = relationship("Device", back_populates="alert_rules")
-    user = relationship("User", back_populates="alert_rules")
-    alert_events = relationship("AlertEvent", back_populates="alert_rule")
+    # --- Relationships (Mapped 적용 완료) ---
+    system_unit: Mapped["SystemUnit"] = relationship("SystemUnit", back_populates="alert_rules")
+    device: Mapped[Optional["Device"]] = relationship("Device", back_populates="alert_rules")
+    user: Mapped["User"] = relationship("User", back_populates="alert_rules")
+    
+    # 이 규칙에 의해 발생한 실제 알림 사건들
+    alert_events: Mapped[List["AlertEvent"]] = relationship(
+        "AlertEvent", back_populates="alert_rule", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"<AlertRule(name={self.name}, severity={self.severity}, active={self.is_active})>"

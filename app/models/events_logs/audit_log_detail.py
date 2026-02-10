@@ -1,6 +1,9 @@
 from sqlalchemy import Column, BigInteger, String, Text, ForeignKey, UniqueConstraint, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
-from typing import Optional # Added Optional
+from typing import Optional, TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from .audit_log import AuditLog
 
 from app.database import Base
 from ..base_model import TimestampMixin
@@ -23,4 +26,4 @@ class AuditLogDetail(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 상세 정보에 대한 설명
 
     # --- Relationships ---
-    audit_log = relationship("AuditLog", back_populates="details_items") # 이 상세 정보가 속한 감사 로그 정보
+    audit_log: Mapped["AuditLog"] = relationship("AuditLog", back_populates="details_items") # 이 상세 정보가 속한 감사 로그 정보

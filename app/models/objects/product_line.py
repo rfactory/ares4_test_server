@@ -1,11 +1,10 @@
-from sqlalchemy import Column, BigInteger, String, Text, Boolean
+from sqlalchemy import BigInteger, String, Text, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import Optional, List, TYPE_CHECKING # TYPE_CHECKING 추가
+from typing import Optional, List, TYPE_CHECKING
 
 from app.database import Base
 from ..base_model import TimestampMixin
 
-# 런타임 순환 참조 방지 및 타입 힌트 지원
 if TYPE_CHECKING:
     from app.models.relationships.plan_applicable_product_line import PlanApplicableProductLine
     from app.models.objects.hardware_blueprint import HardwareBlueprint
@@ -13,24 +12,46 @@ if TYPE_CHECKING:
 
 class ProductLine(Base, TimestampMixin):
     """
-    [Object] 제품 라인 모델은 회사에서 제공하는 제품의 카테고리를 정의합니다.
-    이제 SystemUnit(클러스터 인스턴스)의 설계도 역할을 하는 상위 개체로 기능하며,
-    어떤 구독 플랜에서 어떤 제품 라인을 쓸 수 있는지를 결정하는 핵심 메뉴판의 구성 요소가 됩니다.
+    [Object] 제품 라인 모델:
+    시스템의 논리적 설계(Template)를 정의하며, 실제 배포되는 SystemUnit의 모태가 됩니다.
+    외형(Enclosure)의 변화를 'revision' 필드로 관리하여 하드웨어 생애주기를 추적합니다.
     """
     __tablename__ = "product_lines"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 제품 라인의 고유 ID
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False) # 제품 라인의 이름 (예: 'SmartFarm', 'Naava')
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 제품 라인에 대한 설명
-    enforce_device_limit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) # 이 제품 라인에 속한 장치에 대해 장치 수 제한을 강제할지 여부
     
-    # --- Relationships ---
-    # N:M 관계: 여러 플랜에 속할 수 있음
-    plan_applicable_product_lines: Mapped[List["PlanApplicableProductLine"]] = relationship(
-        "PlanApplicableProductLine", back_populates="product_line"
+    # 이름과 리비전의 조합으로 제품의 물리적 형태 변화를 엄격히 관리
+    __table_args__ = (
+        UniqueConstraint('name', 'revision', name='_name_revision_uc'),
     )
-    # 이 제품 라인(클러스터)을 구성하는 개별 하드웨어 설계도들
-    hardware_blueprints: Mapped[List["HardwareBlueprint"]] = relationship("HardwareBlueprint", back_populates="product_line")
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) 
     
-    # 이 설계도(ProductLine)를 기반으로 생성된 실제 라즈베리파이 클러스터들
-    system_units: Mapped[List["SystemUnit"]] = relationship("SystemUnit", back_populates="product_line")
+    # 제품군 명칭 (예: 'Ares_SmartFarm_V4', 'Naava_GreenWall')
+    name: Mapped[str] = mapped_column(String(100), nullable=False) 
+    
+    # 하드웨어 외형/구조 리비전 (예: 'Rev.A', '2026.Q1')
+    revision: Mapped[str] = mapped_column(String(50), default="1.0", nullable=False) 
+
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True) 
+    
+    # 해당 제품 라인이 요금제별 기기 수 제한을 받는지 여부
+    enforce_device_limit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) 
+    
+    # --- Relationships (Mapped 스타일 적용 완료) ---
+
+    # 1. 비즈니스 계층: 구독 플랜과의 연결 (N:M 중간 테이블)
+    plan_applicable_product_lines: Mapped[List["PlanApplicableProductLine"]] = relationship(
+        "PlanApplicableProductLine", back_populates="product_line", cascade="all, delete-orphan"
+    )
+    
+    # 2. 설계 계층: 이 제품군에 속하는 구체적인 하드웨어 명세들
+    hardware_blueprints: Mapped[List["HardwareBlueprint"]] = relationship(
+        "HardwareBlueprint", back_populates="product_line"
+    )
+    
+    # 3. 인스턴스 계층: 이 설계를 기반으로 현장에 설치된 실제 '왕'들
+    system_units: Mapped[List["SystemUnit"]] = relationship(
+        "SystemUnit", back_populates="product_line"
+    )
+
+    def __repr__(self):
+        return f"<ProductLine(name={self.name}, revision={self.revision})>"

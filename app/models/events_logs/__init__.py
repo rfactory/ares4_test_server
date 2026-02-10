@@ -7,7 +7,9 @@ from .telemetry_data import TelemetryData
 from .user_consumable import UserConsumable
 from .telemetry_metadata import TelemetryMetadata
 from .audit_log_detail import AuditLogDetail
-from .unit_activity_log import UnitActivityLog # UnitActivityLog 추가
+from .unit_activity_log import UnitActivityLog
+from .observation_snapshot import ObservationSnapshot
+from .batch_tracking import BatchTracking
 
 __all__ = [
     "AlertEvent",
@@ -19,5 +21,7 @@ __all__ = [
     "UserConsumable",
     "TelemetryMetadata",
     "AuditLogDetail",
-    "UnitActivityLog", # UnitActivityLog 추가
+    "UnitActivityLog",
+    "ObservationSnapshot",
+    "BatchTracking",
 ]

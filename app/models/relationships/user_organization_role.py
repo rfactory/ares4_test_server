@@ -1,29 +1,48 @@
-from sqlalchemy import BigInteger, UniqueConstraint, Column # Column 추가
-from sqlalchemy.orm import relationship, Mapped, mapped_column # Mapped, mapped_column 추가
-from typing import Optional # Optional 추가
+from sqlalchemy import BigInteger, UniqueConstraint
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import Optional, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, UserFKMixin, OrganizationFKMixin, RoleFKMixin
+from ..base_model import TimestampMixin, UserFKMixin, NullableOrganizationFKMixin, RoleFKMixin
 
-class UserOrganizationRole(Base, TimestampMixin, UserFKMixin, OrganizationFKMixin, RoleFKMixin):
+if TYPE_CHECKING:
+    from app.models.objects.user import User
+    from app.models.objects.organization import Organization
+    from app.models.objects.role import Role
+
+class UserOrganizationRole(Base, TimestampMixin, UserFKMixin, NullableOrganizationFKMixin, RoleFKMixin):
     """
-    사용자-조직-역할 관계 모델은 특정 사용자가 특정 조직 내에서 어떤 역할을 가지는지 정의합니다.
-    이는 RBAC(Role-Based Access Control)의 핵심 부분입니다.
+    [Relationship] 사용자-조직-역할 관계 모델:
+    사용자가 특정 조직 내에서 어떤 권한(Role)을 가졌는지 정의하는 RBAC의 중추입니다.
+    조직 ID가 Null인 경우, 플랫폼 전체에 영향을 미치는 시스템 수준의 역할로 간주합니다.
     """
     __tablename__ = "user_organization_roles"
     __table_args__ = (
-        # 한 사용자는 한 조직 내에서 특정 역할을 한 번만 가질 수 있음
-        # organization_id가 NULL인 경우 (시스템 역할)에도 고유성 보장
+        # 한 사용자가 한 조직 내에서 동일한 역할을 중복해서 가질 수 없도록 제한
         UniqueConstraint('user_id', 'organization_id', 'role_id', name='_user_org_role_uc'),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 사용자-조직-역할 관계의 고유 ID
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+
+    # --- Relationships (Mapped 적용 완료) ---
     
-    # --- 관계 정의 (외래 키) ---
-    # user_id는 UserFKMixin으로부터 상속받습니다. (BigInteger)
-    # organization_id는 OrganizationFKMixin으로부터 상속받습니다. (BigInteger)
-    # role_id는 RoleFKMixin으로부터 상속받습니다. (BigInteger)
+    # 1. 대상 사용자
+    user: Mapped["User"] = relationship(
+        "User", 
+        back_populates="user_role_assignments"
+    )
     
-    # --- Relationships ---
-    user = relationship("User", back_populates="user_role_assignments") # 이 관계에 연결된 사용자 정보
-    organization = relationship("Organization", back_populates="user_roles") # 이 관계에 연결된 조직 정보 (시스템 역할의 경우 Null)
-    role = relationship("Role", back_populates="users") # 이 관계에 연결된 역할 정보
+    # 2. 소속 조직 (Null 가능: 시스템 관리자 등)
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", 
+        back_populates="user_roles"
+    )
+    
+    # 3. 부여된 역할 (Role 객체)
+    role: Mapped["Role"] = relationship(
+        "Role", 
+        back_populates="users"
+    )
+
+    def __repr__(self):
+        org_id = self.organization_id if self.organization_id else "SYSTEM"
+        return f"<UserOrganizationRole(user={self.user_id}, org={org_id}, role={self.role_id})>"

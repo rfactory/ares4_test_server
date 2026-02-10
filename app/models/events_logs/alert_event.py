@@ -1,12 +1,18 @@
 # app/models/events_logs/alert_event.py
 from sqlalchemy import Column, BigInteger, DateTime, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column # Added Mapped, mapped_column
-from typing import Optional # Added Optional
-from datetime import datetime # Added datetime
-
+from typing import Optional, TYPE_CHECKING
+from datetime import datetime
 from app.database import Base
-from ..base_model import TimestampMixin, DeviceFKMixin, AlertRuleFKMixin # UserFKMixin 제거
-class AlertEvent(Base, TimestampMixin, DeviceFKMixin, AlertRuleFKMixin): # UserFKMixin 제거
+from ..base_model import TimestampMixin, DeviceFKMixin, AlertRuleFKMixin
+
+if TYPE_CHECKING:
+    from app.models.objects.user import User
+    from app.models.objects.device import Device
+    from app.models.relationships.alert_rule import AlertRule
+
+
+class AlertEvent(Base, TimestampMixin, DeviceFKMixin, AlertRuleFKMixin):
     """
     알림 이벤트 모델은 특정 알림 규칙에 의해 생성된 실제 알림 이벤트를 기록합니다.
     이는 시스템의 이상 징후 및 사용자 조치 기록을 추적합니다.
@@ -28,7 +34,7 @@ class AlertEvent(Base, TimestampMixin, DeviceFKMixin, AlertRuleFKMixin): # UserF
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True) # 알림이 확인된 시간
    
     # --- Relationships ---
-    device = relationship("Device", back_populates="alert_events") # 이 알림 이벤트를 발생시킨 장치 정보
-    user = relationship("User", foreign_keys=[user_id], back_populates="alert_events_generated") # 이 알림 이벤트를 발생시킨 사용자 정보
-    alert_rule = relationship("AlertRule", back_populates="alert_events") # 이 알림 이벤트를 생성한 알림 규칙 정보
-    acknowledged_by_user = relationship("User", foreign_keys=[acknowledged_by_user_id], back_populates="alert_events_acknowledged") # 이 알림 이벤트를 확인한 사용자 정보
+    device: Mapped["Device"] = relationship("Device", back_populates="alert_events") # 이 알림 이벤트를 발생시킨 장치 정보
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], back_populates="alert_events_generated")# 이 알림 이벤트를 발생시킨 사용자 정보
+    alert_rule: Mapped["AlertRule"] = relationship("AlertRule", back_populates="alert_events") # 이 알림 이벤트를 생성한 알림 규칙 정보
+    acknowledged_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[acknowledged_by_user_id], back_populates="alert_events_acknowledged") # 이 알림 이벤트를 확인한 사용자 정보

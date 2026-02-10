@@ -2,7 +2,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.models.objects.hardware_blueprint import HardwareBlueprint
-from app.models.relationships.blueprint_valid_pin import BlueprintValidPin
+from app.models.internal.internal_blueprint_component import InternalBlueprintComponent
+from app.models.internal.internal_asset_definition import InternalAssetDefinition
 from ..schemas.hardware_blueprint_query import HardwareBlueprintQuery
 
 class CRUDHardwareBlueprintQuery:
@@ -35,14 +36,33 @@ class CRUDHardwareBlueprintQuery:
             query = query.filter(HardwareBlueprint.product_line_id == query_params.product_line_id)
         
         return query.offset(query_params.skip).limit(query_params.limit).all()
+    
+    def get_valid_component_ids_for_blueprint(self, db: Session, *, blueprint_id: int) -> List[int]:
+        """
+        특정 블루프린트에 대해 유효한 부품(supported_component) ID 목록을 조회합니다.
+        """
+        results = db.query(InternalAssetDefinition.supported_component_id).join(
+            InternalBlueprintComponent,
+            InternalAssetDefinition.id == InternalBlueprintComponent.asset_definition_id
+        ).filter(
+            InternalBlueprintComponent.hardware_blueprint_id == blueprint_id,
+            InternalAssetDefinition.supported_component_id.isnot(None) # None인 경우는 제외
+        ).distinct().all() # 중복 제거 (예: 같은 센서가 2개여도 ID는 하나만)
+        
+        # results는 [(1,), (2,), (5,)] 형태의 튜플 리스트로 오므로 flatten 처리
+        return [r[0] for r in results]
 
     def is_component_valid_for_blueprint(self, db: Session, *, blueprint_id: int, supported_component_id: int) -> bool:
         """
         특정 블루프린트에 대해 특정 부품(supported_component)이 유효한지 확인합니다.
         """
-        return db.query(BlueprintValidPin).filter(
-            BlueprintValidPin.blueprint_id == blueprint_id,
-            BlueprintValidPin.supported_component_id == supported_component_id
+        return db.query(InternalBlueprintComponent).join(
+            InternalAssetDefinition,
+            InternalBlueprintComponent.asset_definition_id == InternalAssetDefinition.id
+        ).filter(
+            InternalBlueprintComponent.hardware_blueprint_id == blueprint_id,
+            # AssetDefinition 모델에 supported_component_id가 있다고 가정합니다.
+            InternalAssetDefinition.supported_component_id == supported_component_id
         ).first() is not None
 
 hardware_blueprint_crud_query = CRUDHardwareBlueprintQuery()

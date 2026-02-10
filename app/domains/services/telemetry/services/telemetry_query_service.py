@@ -16,6 +16,8 @@ class TelemetryQueryService:
             skip=filters.skip,
             limit=filters.limit,
             device_ids=filters.device_ids,
+            system_unit_ids=filters.system_unit_ids, # [추가]
+            snapshot_id=filters.snapshot_id,         # [추가]
             metric_names=filters.metric_names,
             start_time=filters.start_time,
             end_time=filters.end_time

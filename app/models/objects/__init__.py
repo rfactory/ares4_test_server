@@ -11,11 +11,12 @@ from .user import User
 from .refresh_token import RefreshToken
 from .access_request import AccessRequest
 from .governance import GovernanceRule
-from .system_unit import SystemUnit # New
-from .image_registry import ImageRegistry # New
-from .vision_feature import VisionFeature # New
-from .action_log import ActionLog # New
-from .device_role import DeviceRole # New
+from .system_unit import SystemUnit
+from .image_registry import ImageRegistry
+from .vision_feature import VisionFeature
+from .action_log import ActionLog
+from .device_role import DeviceRole
+from .provisioning_token import ProvisioningToken
 
 __all__ = [
     "Device",
@@ -31,9 +32,10 @@ __all__ = [
     "RefreshToken",
     "AccessRequest",
     "GovernanceRule",
-    "SystemUnit", # New
-    "ImageRegistry", # New
-    "VisionFeature", # New
-    "ActionLog", # New
-    "DeviceRole", # New
+    "SystemUnit",
+    "ImageRegistry",
+    "VisionFeature",
+    "ActionLog",
+    "DeviceRole",
+    "ProvisioningToken"
 ]

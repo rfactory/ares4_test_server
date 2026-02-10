@@ -1,9 +1,12 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, cast # [수정] cast 추가
 
 from app.models.objects.user import User
 from app.models.objects.role import Role
 from app.core.redis_client import get_redis_client
 from app.core.exceptions import ForbiddenError
+
+# inter_domain 경로에서 스키마 가져오기
+from app.domains.inter_domain.governance.schemas.governance_rule_provider import GovernanceRuleRead
 
 class GovernanceValidator:
     def _check_conditions(
@@ -21,7 +24,9 @@ class GovernanceValidator:
     def _check_check_max_headcount(self, value: bool, **kwargs) -> bool:
         """역할의 최대 인원수를 확인합니다."""
         if not value: return True
-        target_role = kwargs.get('target_role')
+        
+        # [수정] cast를 사용하여 강제로 Role 타입임을 주입합니다.
+        target_role = cast(Optional[Role], kwargs.get('target_role'))
         current_headcount = kwargs.get('current_headcount')
 
         if not target_role or target_role.max_headcount is None or target_role.max_headcount == -1:
@@ -43,7 +48,8 @@ class GovernanceValidator:
 
     def _check_target_role_tier(self, value: Dict[str, int], **kwargs) -> bool:
         """대상 역할의 티어를 확인합니다."""
-        target_role = kwargs.get('target_role')
+        # [수정] cast 사용
+        target_role = cast(Optional[Role], kwargs.get('target_role'))
         if not target_role or target_role.tier is None: return False
         
         for operator, num in value.items():
@@ -55,21 +61,27 @@ class GovernanceValidator:
 
     def _check_target_role_scope(self, value: str, **kwargs) -> bool:
         """대상 역할의 스코프를 확인합니다."""
-        target_role = kwargs.get('target_role')
+        # [수정] cast 사용
+        target_role = cast(Optional[Role], kwargs.get('target_role'))
         if not target_role: return False
         return target_role.scope == value
 
     def _check_is_emergency_mode(self, value: bool, **kwargs) -> bool:
         """비상 모드 활성화 여부를 확인합니다."""
         redis_client = get_redis_client()
-        is_emergency = redis_client.get('system:emergency_mode_active') == b'true'
+        val = redis_client.get('system:emergency_mode_active')
+        if val is None:
+            is_emergency = False
+        else:
+            is_emergency = (val == b'true' or val == 'true')
+            
         return is_emergency if value else not is_emergency
 
     def evaluate_rule(
         self,
         *,
         actor_user: User,
-        matching_rules: List[Any], # 실제로는 GovernanceRule 리스트
+        matching_rules: List[GovernanceRuleRead], 
         **kwargs
     ) -> None:
         """전달된 규칙 목록을 평가하여 허용 여부를 결정하고, 실패 시 에러를 발생시킵니다."""
@@ -92,6 +104,5 @@ class GovernanceValidator:
 
         if not allow_action:
             raise ForbiddenError("No governance rule allows this action.")
-
 
 governance_validator = GovernanceValidator()

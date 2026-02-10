@@ -1,25 +1,44 @@
-from sqlalchemy import Column, BigInteger, UniqueConstraint, Integer # Integer (quantity)
-from sqlalchemy.orm import relationship, Mapped, mapped_column # Mapped, mapped_column 추가
-from typing import Optional # Optional 추가
+from sqlalchemy import BigInteger, UniqueConstraint, Integer
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import Optional, TYPE_CHECKING
 
 from app.database import Base
-from ..base_model import TimestampMixin, HardwareBlueprintFKMixin, AssetDefinitionFKMixin # Mixin 추가
+from ..base_model import TimestampMixin, HardwareBlueprintFKMixin, AssetDefinitionFKMixin
 
-class InternalBlueprintComponent(Base, TimestampMixin, HardwareBlueprintFKMixin, AssetDefinitionFKMixin): # Mixin 상속
+if TYPE_CHECKING:
+    # 순환 참조 방지 및 타입 힌트 제공
+    from ..objects.hardware_blueprint import HardwareBlueprint
+    from .internal_asset_definition import InternalAssetDefinition
+
+class InternalBlueprintComponent(Base, TimestampMixin, HardwareBlueprintFKMixin, AssetDefinitionFKMixin):
     """
-    내부 블루프린트 컴포넌트 모델은 특정 하드웨어 블루프린트를 구성하는 데 필요한
-    내부 자산(예: 특정 센서, 모듈)의 종류와 수량을 정의합니다.
+    [Master/BOM] 내부 블루프린트 컴포넌트 모델:
+    특정 하드웨어 설계도(HardwareBlueprint)를 구성하는 표준 자재 명세서(Standard BOM) 정보를 관리합니다.
     """
     __tablename__ = "internal_blueprint_components"
     __table_args__ = (
+        # 동일한 설계도 내에 동일한 부품이 중복 정의되는 것을 방지
         UniqueConstraint('hardware_blueprint_id', 'asset_definition_id', name='_blueprint_asset_uc'),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) # 블루프린트 컴포넌트의 고유 ID
-    # hardware_blueprint_id는 HardwareBlueprintFKMixin으로부터 상속받습니다. (BigInteger)
-    # asset_definition_id는 AssetDefinitionFKMixin으로부터 상속받습니다. (BigInteger)
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False) # 해당 블루프린트에 필요한 자산의 수량
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True) 
     
-    # --- Relationships ---
-    blueprint = relationship("HardwareBlueprint", back_populates="internal_blueprint_components") # 이 컴포넌트가 속한 하드웨어 블루프린트 정보
-    asset_definition = relationship("InternalAssetDefinition", back_populates="blueprint_components") # 이 컴포넌트가 정의하는 내부 자산 정보
+    # 해당 설계도 구현을 위해 필요한 부품의 수량
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1) 
+    
+    # --- Relationships (Mapped 적용 완료) ---
+    
+    # 부모: 이 컴포넌트 구성을 포함하는 상위 설계도
+    blueprint: Mapped["HardwareBlueprint"] = relationship(
+        "HardwareBlueprint", 
+        back_populates="internal_blueprint_components"
+    ) 
+    
+    # 참조: 이 항목이 가리키는 구체적인 부품 정의(Master Data)
+    asset_definition: Mapped["InternalAssetDefinition"] = relationship(
+        "InternalAssetDefinition", 
+        back_populates="blueprint_components"
+    )
+
+    def __repr__(self):
+        return f"<InternalBlueprintComponent(blueprint_id={self.hardware_blueprint_id}, asset_id={self.asset_definition_id}, qty={self.quantity})>"

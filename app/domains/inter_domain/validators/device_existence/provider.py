@@ -1,27 +1,28 @@
-# inter_domain/validators/device_existence/provider.py
-
-from sqlalchemy.orm import Session
 from typing import Tuple, Optional
 
-# Validator 임포트
+# 판단 전문가(Validator) 및 필요한 데이터 규격(Schema) 임포트
 from app.domains.action_authorization.validators.device_existence.validator import device_existence_validator
+from app.domains.inter_domain.device_management.schemas.device_query import DeviceRead
 
 class DeviceExistenceValidatorProvider:
     """
-    DeviceExistenceValidator의 기능을 외부 도메인에 노출하는 제공자입니다.
+    내부 도메인의 DeviceExistenceValidator 기능을 외부(Policy 등)에 노출하는 제공자입니다.
+    판단에 필요한 데이터는 외부에서 공급받는 것을 원칙으로 합니다.
     """
-    def validate(
+
+    def validate_device_existence(
         self,
-        db: Session,
         *,
-        device_uuid_str: str
+        device: Optional[DeviceRead]
     ) -> Tuple[bool, Optional[str]]:
         """
-        주어진 UUID로 장치가 DB에 실제로 존재하는지 확인하는 '판단'을 위임합니다.
+        공급받은 장치 데이터를 바탕으로 존재 및 상태의 적절성을 '판단'하도록 위임합니다.
+        
+        :param device: Query Provider를 통해 조회된 장치 정보 (없을 경우 None)
+        :return: (성공 여부, 에러 메시지)
         """
-        return device_existence_validator.validate(
-            db=db,
-            device_uuid_str=device_uuid_str
-        )
+        # 내부 Validator의 새로운 메서드인 validate_existence를 호출합니다.
+        return device_existence_validator.validate_existence(device=device)
 
+# 싱글톤 객체 생성
 device_existence_validator_provider = DeviceExistenceValidatorProvider()

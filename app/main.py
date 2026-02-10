@@ -3,24 +3,29 @@ import asyncio
 from fastapi import FastAPI, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from app.api.v1.api import api_router
-from fastapi.responses import JSONResponse # JSONResponse 임포트 추가
+from fastapi.responses import JSONResponse 
+from typing import Optional
 
 from app.core.config import get_settings
 from app.database import SessionLocal
-from app.core.redis_client import get_redis_client # get_redis_client 임포트
+from app.core.redis_client import get_redis_client 
+from app.core.exceptions import ForbiddenError, AppLogicError
+
+# --- Domain Modules ---
 from app.domains.application.mqtt.orchestrator import MqttLifecycleOrchestrator
 from app.domains.inter_domain.governance.governance_query_provider import governance_query_provider
 from app.domains.inter_domain.governance.governance_command_provider import governance_command_provider
-from app.core.exceptions import ForbiddenError, AppLogicError # AppLogicError 임포트 추가
-from typing import Optional
+
+# --- Routers ---
+from app.api.v1.api import api_router
+# [NEW] 방금 만든 업로드용 라우터
+from app.domains.application.upload.endpoints import router as upload_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 _mqtt_orchestrator: Optional[MqttLifecycleOrchestrator] = None
 _governance_task: Optional[asyncio.Task] = None
-# [추가] 백그라운드 태스크의 가비지 컬렉션을 방지하기 위한 강한 참조 저장소
 _background_tasks = set()
 
 async def _periodic_governance_check():
@@ -42,13 +47,10 @@ async def lifespan(app: FastAPI):
     global _mqtt_orchestrator, _governance_task, _background_tasks
     
     # 1. MQTT Orchestrator 초기화 및 기동
-    # 내부적으로 인증서 획득, 연결 매니저 설정, 로테이션 감시 루프(Task)가 시작됩니다.
     _mqtt_orchestrator = MqttLifecycleOrchestrator(
         settings=get_settings(),
         db_session_factory=SessionLocal
     )
-    # [수정] await 대신 create_task를 사용하고 세트에 보관하여 가비지 컬렉션을 방지합니다.
-    # 이렇게 하면 FastAPI가 즉시 yield로 넘어가서 EMQX의 인증 요청을 받을 준비를 마칩니다.
     mqtt_startup_task = asyncio.create_task(_mqtt_orchestrator.startup())
     _background_tasks.add(mqtt_startup_task)
     mqtt_startup_task.add_done_callback(_background_tasks.discard)
@@ -67,7 +69,6 @@ async def lifespan(app: FastAPI):
         logger.info("Governance task cancelled.")
         
     if _mqtt_orchestrator:
-        # shutdown 내에서 감시 루프 Task 취소 및 MQTT 연결 해제가 수행됩니다.
         await _mqtt_orchestrator.shutdown()
         logger.info("MQTT Orchestrator shut down successfully.")
 
@@ -86,12 +87,12 @@ async def forbidden_error_handler(request: Request, exc: ForbiddenError):
         content={"detail": exc.message}
     )
 
-# AppLogicError 예외 처리기 (인원수 제한 등)
+# AppLogicError 예외 처리기
 @app.exception_handler(AppLogicError)
 async def app_logic_error_handler(request: Request, exc: AppLogicError):
     logger.warning(f"AppLogicError: {exc.message}")
     return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT, # 또는 400 Bad Request
+        status_code=status.HTTP_409_CONFLICT,
         content={"detail": exc.message}
     )
 
@@ -107,10 +108,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["DPoP-Nonce", "dpop-nonce"], # 대소문자 모두 노출
+    expose_headers=["DPoP-Nonce", "dpop-nonce"], 
 )
 
+# 1. 기본 API 라우터 등록
 app.include_router(api_router, prefix="/api/v1")
+
+# [NEW] 2. 이미지 업로드 라우터 등록 (별도 태그로 관리)
+# 최종 주소: /api/v1/upload/image
+app.include_router(upload_router, prefix="/api/v1/upload", tags=["Upload"])
 
 
 @app.get("/")

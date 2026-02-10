@@ -4,10 +4,13 @@ from datetime import datetime
 
 from app.models.objects.user import User as DBUser
 from app.models.objects.access_request import AccessRequest
-from app.domains.services.access_requests.services.access_request_command_service import access_request_command_service
+from app.domains.services.access_requests.services.access_request_command_service import access_request_command_service, AccessRequestCommandService
 from app.domains.services.access_requests.schemas.access_request_command import AccessRequestCreate, AccessRequestUpdate
 
 class AccessRequestCommandProviders:
+    def get_service(self) -> AccessRequestCommandService:
+        return access_request_command_service
+    
     def create_access_request(
         self, 
         db: Session, 
@@ -36,15 +39,31 @@ class AccessRequestCommandProviders:
         self, 
         db: Session, 
         *,
-        request_id: int, 
+        db_obj: AccessRequest, 
         update_in: AccessRequestUpdate, 
         admin_user: DBUser
     ) -> AccessRequest:
         """접근 요청 상태 업데이트를 위한 안정적인 인터페이스를 제공합니다."""
         return access_request_command_service.update_access_request_status(
             db=db, 
-            request_id=request_id,
+            db_obj=db_obj,
             update_in=update_in, 
+            admin_user=admin_user
+        )
+        
+    def reject_access_request(
+        self,
+        db: Session,
+        *,
+        db_obj: AccessRequest,
+        admin_user: DBUser
+    ) -> AccessRequest:
+        """접근 요청을 거부(rejected) 상태로 변경합니다."""
+        update_in = AccessRequestUpdate(status="rejected")
+        return access_request_command_service.update_access_request_status(
+            db=db,
+            db_obj=db_obj,
+            update_in=update_in,
             admin_user=admin_user
         )
 
