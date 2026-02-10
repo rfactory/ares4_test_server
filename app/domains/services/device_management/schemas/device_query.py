@@ -49,5 +49,8 @@ class DeviceQuery(BaseModel):
     hardware_blueprint_id: Optional[int] = Field(None, description="필터링할 하드웨어 블루프린트 ID")
     visibility_status: Optional[str] = Field(None, description="필터링할 공개 범위 상태")
     status: Optional[str] = Field(None, description="필터링할 장치 상태")
+    
+    is_active: Optional[bool] = Field(None, description="활성 상태 필터링")
+
     skip: int = Field(0, ge=0, description="건너뛸 레코드 수")
     limit: int = Field(100, ge=1, le=1000, description="반환할 최대 레코드 수")

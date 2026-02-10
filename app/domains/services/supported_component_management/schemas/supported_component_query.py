@@ -14,3 +14,12 @@ class SupportedComponentRead(SupportedComponentBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+    
+class SupportedComponentQuery(BaseModel):
+    """부품 검색용 쿼리 파라미터"""
+    model_name: Optional[str] = Field(None, description="모델명으로 검색 (예: SYSTEM)")
+    category: Optional[str] = Field(None, description="카테고리로 검색")
+    manufacturer: Optional[str] = Field(None, description="제조사로 검색")
+    
+    skip: int = Field(0, ge=0)
+    limit: int = Field(100, ge=1)
