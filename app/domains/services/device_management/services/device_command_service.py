@@ -119,7 +119,6 @@ class DeviceManagementCommandService:
         hmac_svc = hmac_command_provider.get_service()
         hmac_svc.store_device_hmac(path=vault_path, key=new_hmac_key)
 
-        # ✅ [수정] Blueprint도 없으면 None 반환 (이제 에러 안 남)
         bp_id = self._get_default_blueprint_id(db)
         unit_id = self._get_target_unit_id(db, target_unit_name)
 
@@ -141,6 +140,10 @@ class DeviceManagementCommandService:
         
         # 시스템 유저(actor=None) 권한으로 생성
         new_device = self.create_device(db, obj_in=obj_in, actor_user=None)
+        
+        new_device.hmac_secret_key = new_hmac_key
+        db.add(new_device)
+        db.flush()
 
         # D. mTLS 인증서 발급
         cert_svc = certificate_command_provider.get_service()
@@ -159,7 +162,6 @@ class DeviceManagementCommandService:
         """기존 장치 정보를 업데이트합니다."""
         db_obj = device_command_crud.get(db, id=device_id)
         
-        # [수정] 업데이트 시에도 청사진 ID가 있을 때만 검증
         if obj_in.hardware_blueprint_id:
             if not db.query(HardwareBlueprint).filter(HardwareBlueprint.id == obj_in.hardware_blueprint_id).first():
                 raise NotFoundError("HardwareBlueprint", str(obj_in.hardware_blueprint_id))
@@ -195,5 +197,7 @@ class DeviceManagementCommandService:
             new_value=deleted_device.as_dict()
         )
         return deleted_device
+    
+    
 
 device_management_command_service = DeviceManagementCommandService()
