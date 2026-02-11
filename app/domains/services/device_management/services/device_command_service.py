@@ -98,13 +98,8 @@ class DeviceManagementCommandService:
         return new_device
     
     async def execute_factory_enrollment_transaction(
-        self, 
-        db: Session, 
-        cpu_serial: str, 
-        client_ip: str,
-        target_unit_name: str = None,
-        components: List[str] = None,
-        auto_activate: bool = False
+        self, db: Session, cpu_serial: str, client_ip: str,
+        target_unit_name: str = None, components: List[str] = None, auto_activate: bool = False
     ) -> dict:
         """
         [핵심] 공장 등록 통합 트랜잭션. 
@@ -144,10 +139,14 @@ class DeviceManagementCommandService:
         new_device.hmac_secret_key = new_hmac_key
         db.add(new_device)
         db.flush()
+        db.refresh(new_device)
 
         # D. mTLS 인증서 발급
         cert_svc = certificate_command_provider.get_service()
         certs = cert_svc.create_device_certificate(db=db, common_name=new_uuid)
+        
+        db.flush()
+        logger.info(f"⚙️ [Service] Device {new_uuid} prepared for commitment.")
 
         return {
             "device_id": new_uuid,
@@ -158,7 +157,7 @@ class DeviceManagementCommandService:
             "blueprint_id": bp_id
         }
     
-    def update_device(self, db: Session, *, device_id: int, obj_in: DeviceUpdate, actor_user: User) -> DBDevice:
+    def update_device(self, db: Session, *, device_id: int, obj_in: DeviceUpdate, actor_user: Optional[User] = None) -> DBDevice:
         """기존 장치 정보를 업데이트합니다."""
         db_obj = device_command_crud.get(db, id=device_id)
         
@@ -180,7 +179,7 @@ class DeviceManagementCommandService:
         )
         return updated_device
 
-    def delete_device(self, db: Session, *, device_id: int, actor_user: User) -> DBDevice:
+    def delete_device(self, db: Session, *, device_id: int, actor_user: Optional[User] = None) -> DBDevice:
         """장치를 비활성화하여 소프트 삭제합니다."""
         db_obj = device_command_crud.get(db, id=device_id)
         old_value = db_obj.as_dict()

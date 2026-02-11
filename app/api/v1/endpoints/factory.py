@@ -18,7 +18,7 @@ async def factory_auto_enroll(
 
     # 2. 공장 신뢰 IP 리스트 (현재 라즈베리파이 IP인 10.1.1.63을 직접 추가!)
     # 문자열 그대로 비교하기 때문에 정확한 IP를 넣어줘야 합니다.
-    TRUSTED_FACTORY_IPS = ["127.0.0.1", "10.1.1.63"] 
+    TRUSTED_FACTORY_IPS = ["127.0.0.1", "10.1.2.135"] 
 
     print(f"🔍 [DEBUG] Final Check - Target IP: {target_ip} against {TRUSTED_FACTORY_IPS}")
 

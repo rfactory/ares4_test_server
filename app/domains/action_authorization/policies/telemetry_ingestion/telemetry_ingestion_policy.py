@@ -114,24 +114,26 @@ class TelemetryIngestionPolicy:
 
             for reading in data_to_save:
                 captured_at = self._parse_timestamp(reading.get('timestamp'))
-                avg_value = reading.get('avg') or reading.get('value') 
-
+                avg_val = reading.get('avg_value')
+                if avg_val is None:
+                    avg_val = reading.get('avg', reading.get('value'))
+                
                 telemetry_create_list.append(
                     TelemetryCommandDataCreate(
                         device_id=device.id, 
                         system_unit_id=device.system_unit_id, 
                         snapshot_id=snapshot.id, 
-                        component_name=instance_name,
+                        component_name=instance_name,  # 스키마에 추가한 필드에 instance_name 주입
                         metric_name=reading.get('metric_name'),
                         unit=supported_component.unit, 
-                        avg_value=avg_value, 
-                        min_value=reading.get('min', avg_value),
-                        max_value=reading.get('max', avg_value),
-                        std_dev=reading.get('std_dev', 0.0),
-                        slope=reading.get('slope', 0.0),
-                        sample_count=reading.get('count', 1),
+                        avg_value=avg_val, 
+                        min_value=reading.get('min_value') if reading.get('min_value') is not None else reading.get('min', avg_val),
+                        max_value=reading.get('max_value') if reading.get('max_value') is not None else reading.get('max', avg_val),
+                        std_dev=reading.get('std_dev') if reading.get('std_dev') is not None else 0.0,
+                        slope=reading.get('slope') if reading.get('slope') is not None else 0.0,
+                        sample_count=reading.get('sample_count') if reading.get('sample_count') is not None else reading.get('count', 1),
                         captured_at=captured_at,
-                        extra_stats=reading.get('extra') 
+                        extra_stats=reading.get('extra')
                     )
                 )
 

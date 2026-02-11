@@ -16,10 +16,9 @@ class DeviceInternalQueryProvider:
         UUID로 장치 정보를 조회하며, shared_secret과 같은 민감한 정보를 포함합니다.
         """
         # 서비스 계층에서는 DB 모델을 반환하므로, 이를 DeviceWithSecret 스키마로 변환합니다.
-        db_device = device_management_query_service.get_device_by_uuid(db, current_uuid=current_uuid)
+        db_device = device_management_query_service.get_device_model_by_uuid(db, current_uuid=current_uuid)
         
-        if not db_device:
-            return None
+        if not db_device: return None
         
         # DB 모델 객체를 DeviceWithSecret 스키마로 변환
         return DeviceWithSecret.model_validate(db_device)

@@ -13,6 +13,7 @@ class TelemetryCommandDataCreate(BaseModel):
     system_unit_id: Optional[int] = Field(None, description="관련 시스템 유닛 ID")
     snapshot_id: str = Field(..., description="이미지/액션 동기화를 위한 스냅샷 ID")
     captured_at: datetime = Field(default_factory=datetime.now, description="센서 측정 시각")
+    component_name: str = Field(..., description="데이터가 발생한 부품 인스턴스 명칭")
     metric_name: str = Field(..., description="측정 항목명 (예: temp, vibration)")
     unit: Optional[str] = Field(None, description="단위")
 

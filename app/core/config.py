@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     
     # --- EMQX Webhook Settings ---
     EMQX_WEBHOOK_SECRET: str
+    ARES4_HMAC_KEY: str
     
     # --- Storage Settings ---
     UPLOAD_DIR: str = "/app/uploads"

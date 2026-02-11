@@ -1,8 +1,8 @@
-from sqlalchemy import BigInteger, String, Float, Index, Integer, ForeignKey
+from sqlalchemy import BigInteger, String, Float, Index, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, Dict, List, TYPE_CHECKING
 from datetime import datetime
-from sqlalchemy.dialects import postgresql  # JSONB 유지를 위해 필요
+from sqlalchemy.dialects import postgresql
 
 from app.database import Base
 from ..base_model import TimestampMixin, DeviceFKMixin, SystemUnitFKMixin
@@ -23,11 +23,14 @@ class TelemetryData(Base, TimestampMixin, DeviceFKMixin, SystemUnitFKMixin):
         Index('idx_telemetry_device_time', 'device_id', 'created_at'),
         Index('idx_telemetry_system_unit_time', 'system_unit_id', 'created_at'),
         Index('idx_telemetry_snapshot_id', 'snapshot_id'),
+        UniqueConstraint(
+            'device_id', 'component_name', 'metric_name', 'captured_at', 
+            name='_device_component_metric_time_uc'
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     
-    # ObservationSnapshot과의 연결 고리
     snapshot_id: Mapped[str] = mapped_column(
         String(255), 
         ForeignKey("observation_snapshots.id"), 
@@ -37,6 +40,7 @@ class TelemetryData(Base, TimestampMixin, DeviceFKMixin, SystemUnitFKMixin):
 
     # --- 데이터 종류 식별 ---
     metric_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="측정 항목명 (temp, co2 등)")
+    component_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="데이터가 발생한 부품 인스턴스 명칭")
     unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, comment="측정 단위")
 
     # --- 10초간의 통계값 (AI State 입력 핵심) ---

@@ -1,9 +1,10 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer
 from typing import List, Optional
 from uuid import UUID
 import uuid
 
 from app.core.exceptions import AppLogicError
+from app.models.objects.device import Device as DBDevice
 
 from ..crud.device_query_crud import device_query_crud
 from ..schemas.device_query import DeviceQuery, DeviceRead
@@ -20,33 +21,44 @@ class DeviceManagementQueryService:
         return DeviceRead.model_validate(db_device) if db_device else None
 
     def get_device_by_uuid(self, db: Session, *, current_uuid: UUID) -> Optional[DeviceRead]:
-        """UUID로 단일 장치를 조회합니다."""
+        """UUID로 단일 장치를 조회하여 DeviceRead 스키마로 반환합니다."""
+        db_device = self.get_device_model_by_uuid(db, current_uuid=current_uuid)
+        return DeviceRead.model_validate(db_device) if db_device else None
+    
+    def get_device_model_by_uuid(self, db: Session, *, current_uuid: UUID) -> Optional[DBDevice]:
+        """
+        [내부용] Pydantic 변환 없이 SQLAlchemy 모델 원본을 반환합니다.
+        hmac_secret_key와 같이 deferred된 민감 필드를 강제로 로드합니다.
+        """
+        # 1. 기존 유저님의 방식인 DeviceQuery를 사용하면서도
+        # 2. hmac_secret_key를 undefer로 끄집어냅니다.
         query_params = DeviceQuery(current_uuid=current_uuid)
-        db_devices = device_query_crud.get_multi(db, query_params=query_params)
-        return DeviceRead.model_validate(db_devices[0]) if db_devices else None
+        
+        # CRUD의 get_multi를 쓰되, 쿼리 옵션에 undefer를 적용하기 위해 직접 쿼리하거나 
+        # CRUD에 옵션을 넘기는 방식이 좋지만, 가장 확실한 방법은 아래와 같습니다.
+        db_device = db.query(DBDevice).options(
+            undefer(DBDevice.hmac_secret_key)
+        ).filter(
+            DBDevice.current_uuid == str(current_uuid)
+        ).first()
+        
+        return db_device
 
     # --- ACL 검증을 위한 핵심 중계 메서드 ---
     def get_device_by_identifier(self, db: Session, *, identifier: str) -> Optional[DeviceRead]:
-        """
-        UUID 또는 CPU Serial을 통해 장치를 조회하고 스키마로 변환합니다.
-        CRUD 레이어에서 이미 joinedload가 적용되어 있으므로 소유권 정보가 포함됩니다.
-        """
+        """UUID 또는 CPU Serial을 통해 장치를 조회하고 스키마로 변환합니다."""
         is_valid_uuid = False
         try:
-            # 하이픈 유무와 상관없이 UUID 형식인지 체크
             uuid.UUID(identifier)
             is_valid_uuid = True
         except (ValueError, AttributeError):
             is_valid_uuid = False
 
         if is_valid_uuid:
-            # 1. UUID 형식이면 UUID로 조회 시도
-            # (만약 여기서 못 찾으면 시리얼로 한 번 더 찾는 로직을 넣을 수도 있습니다)
             db_device = device_query_crud.get_by_uuid(db, current_uuid=identifier)
             if not db_device:
                 db_device = device_query_crud.get_by_serial(db, serial=identifier)
         else:
-            # 2. UUID 형식이 아니면 안전하게 시리얼로만 조회
             db_device = device_query_crud.get_by_serial(db, serial=identifier)
 
         if not db_device:
@@ -55,17 +67,13 @@ class DeviceManagementQueryService:
         return DeviceRead.model_validate(db_device)
     
     def get_by_serial(self, db: Session, *, serial: str) -> Optional[DeviceRead]:
-        """시리얼 번호로 장치를 조회합니다. (Factory Enrollment Policy용)"""
+        """시리얼 번호로 장치를 조회합니다."""
         return self.get_device_by_identifier(db, identifier=serial)
     
     def ensure_device_is_enrollee(self, db: Session, serial: str):
-        """
-        기기가 신규 등록 가능한 상태인지 확인합니다.
-        이미 등록된 기기일 경우 AppLogicError를 발생시켜 흐름을 중단합니다.
-        """
+        """기기가 신규 등록 가능한 상태인지 확인합니다."""
         existing_device = self.get_by_serial(db, serial=serial)
         if existing_device:
-            # Policy가 직접 판단하던 "중복 등록 방지" 로직을 쿼리 서비스가 담당합니다.
             raise AppLogicError(f"Device with serial {serial} is already enrolled.")
 
 device_management_query_service = DeviceManagementQueryService()
