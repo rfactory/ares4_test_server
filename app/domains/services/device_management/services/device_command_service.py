@@ -3,6 +3,7 @@ import uuid
 import secrets
 from sqlalchemy.orm import Session
 from typing import Optional, Tuple, List
+from datetime import datetime, timezone
 
 # --- Model Imports ---
 from app.models.objects.device import Device as DBDevice
@@ -197,6 +198,16 @@ class DeviceManagementCommandService:
         )
         return deleted_device
     
+    def update_last_seen(self, db: Session, *, device_id: int) -> Optional[DBDevice]:
+        """기기의 마지막 활동 시간을 현재 서버 시간으로 업데이트합니다."""
+        db_obj = device_command_crud.get(db, id=device_id)
+        if not db_obj:
+            return None
+        
+        # 별도의 Audit 로그 없이 고속 업데이트 (성능을 위해 flush만 실행)
+        db_obj.last_seen_at = datetime.now(timezone.utc)
+        db.add(db_obj)
+        db.flush()
+        return db_obj
     
-
 device_management_command_service = DeviceManagementCommandService()

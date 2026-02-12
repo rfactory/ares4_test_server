@@ -25,5 +25,9 @@ class DeviceManagementCommandProvider:
     def delete_device(self, db: Session, *, device_id: int, actor_user: Optional[any] = None) -> DBDevice:
         """장치 삭제를 위한 안정적인 인터페이스를 제공합니다."""
         return device_management_command_service.delete_device(db, device_id=device_id, actor_user=actor_user)
+    
+    def update_last_seen_at(self, db: Session, device_id: int):
+        """[Inter-Domain] 기기 활동 시간 업데이트 인터페이스"""
+        return device_management_command_service.update_last_seen(db, device_id=device_id)
 
 device_management_command_provider = DeviceManagementCommandProvider()

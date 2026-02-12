@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import BigInteger, String, Enum, JSON, Text
+from sqlalchemy import BigInteger, String, Enum, JSON, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List, TYPE_CHECKING
 from app.database import Base
@@ -42,6 +42,13 @@ class SystemUnit(Base, TimestampMixin, NullableOrganizationFKMixin, ProductLineF
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     
+    master_device_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, 
+        ForeignKey("devices.id", ondelete="SET NULL"), 
+        nullable=True,
+        comment="클러스터의 텔레메트리 전송을 담당하는 마스터 기기"
+    )
+    
     # 운영 상태 (Enum 적용)
     status: Mapped[UnitStatus] = mapped_column(
         Enum(UnitStatus, name='unit_status', create_type=False),
@@ -70,7 +77,15 @@ class SystemUnit(Base, TimestampMixin, NullableOrganizationFKMixin, ProductLineF
 
     # 2. 하부 구조 (물리적 실체)
     # [신하] 유닛에 소속된 컴퓨팅 노드들
-    devices: Mapped[List["Device"]] = relationship("Device", back_populates="system_unit")
+    devices: Mapped[List["Device"]] = relationship(
+        "Device", 
+        back_populates="system_unit",
+        foreign_keys="[Device.system_unit_id]" 
+    )
+    master_device: Mapped[Optional["Device"]] = relationship(
+        "Device", 
+        foreign_keys=[master_device_id]
+    )
     
     role_assignments: Mapped[List["DeviceRoleAssignment"]] = relationship(
         "DeviceRoleAssignment", 
@@ -103,4 +118,4 @@ class SystemUnit(Base, TimestampMixin, NullableOrganizationFKMixin, ProductLineF
     alert_rules: Mapped[List["AlertRule"]] = relationship("AlertRule", back_populates="system_unit")
 
     def __repr__(self):
-        return f"<SystemUnit(id={self.id}, name={self.name}, status={self.status})>"
+        return f"<SystemUnit(id={self.id}, name={self.name}, master={self.master_device_id}, status={self.status})>"

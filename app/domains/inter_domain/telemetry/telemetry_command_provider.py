@@ -1,7 +1,7 @@
 # --- Telemetry Command Provider ---
 
 from sqlalchemy.orm import Session
-from typing import List, Dict
+from typing import List, Dict, Any
 
 from app.domains.services.telemetry.schemas.telemetry_command import TelemetryCommandDataCreate
 from app.domains.services.telemetry.services.telemetry_command_service import telemetry_command_service
@@ -21,6 +21,14 @@ class TelemetryCommandProvider:
             db=db, 
             device_id=device_id, 
             telemetry_list=telemetry_list
-        )    
+        )
+    
+    def process_cluster_batch_ingestion(self, db: Session, *, system_unit, payload: Dict[str, Any]):
+        """클러스터 단위의 통합 데이터를 분해하여 저장하도록 서비스에 명령합니다."""
+        return telemetry_command_service.process_cluster_batch_ingestion(
+            db=db, 
+            system_unit=system_unit, 
+            payload=payload
+        )
 
 telemetry_command_provider = TelemetryCommandProvider()

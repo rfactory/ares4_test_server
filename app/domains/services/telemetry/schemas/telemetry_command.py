@@ -28,3 +28,28 @@ class TelemetryCommandDataCreate(BaseModel):
     # 특화 데이터용 확장 필드
     extra_stats: Optional[Dict] = Field(None, description="추가 통계 데이터 (JSON)")
     metadata_items: Optional[List[TelemetryCommandMetadataCreate]] = Field(None, description="메타데이터 리스트")
+class ClusterNodeMetric(BaseModel):
+    """노드별 개별 측정 항목"""
+    metric_name: str
+    avg_value: float
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    std_dev: float = 0.0
+    slope: float = 0.0
+    sample_count: int = 1
+    timestamp: datetime
+    extra: Optional[Dict] = None
+
+class ClusterNodeData(BaseModel):
+    """기기(Node)별 데이터 묶음"""
+    device_uuid: str  # 슬레이브 기기의 UUID
+    instance_name: str # 부품 명칭 (예: main_board, motor_alpha)
+    component_type: str
+    sequence_number: Optional[int] = None
+    metrics: List[ClusterNodeMetric]
+
+class ClusterTelemetryIngestionRequest(BaseModel):
+    """[최상위] 마스터가 보내는 클러스터 통합 페이로드"""
+    master_uuid: str   # 마스터 기기의 UUID
+    snapshot_id: str
+    nodes: List[ClusterNodeData]
