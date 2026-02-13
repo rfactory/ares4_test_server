@@ -2,7 +2,7 @@ from sqlalchemy import BigInteger, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, List, TYPE_CHECKING 
 from app.database import Base
-from ..base_model import TimestampMixin, LogBaseMixin, NullableUserFKMixin
+from ..base_model import TimestampMixin, LogBaseMixin, NullableUserFKMixin, NullableOrganizationFKMixin
 
 # 런타임 순환 참조 방지
 if TYPE_CHECKING:
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .audit_log_detail import AuditLogDetail
     from app.models.objects.organization import Organization
 
-class AuditLog(Base, TimestampMixin, LogBaseMixin, NullableUserFKMixin):
+class AuditLog(Base, TimestampMixin, LogBaseMixin, NullableUserFKMixin, NullableOrganizationFKMixin):
     """
     [Log] 시스템 내 중요한 사용자 활동 및 시스템 이벤트를 기록합니다.
     """

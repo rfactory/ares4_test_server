@@ -3,7 +3,7 @@ from sqlalchemy import BigInteger, String, Text, JSON, Boolean, Enum, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, List, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, UserFKMixin
+from ..base_model import TimestampMixin, UserFKMixin, NullableOrganizationFKMixin
 
 if TYPE_CHECKING:
     from app.models.objects.system_unit import SystemUnit
@@ -19,7 +19,7 @@ class AlertSeverity(str, enum.Enum):
     HIGH = 'HIGH'
     CRITICAL = 'CRITICAL'
 
-class AlertRule(Base, TimestampMixin, UserFKMixin):
+class AlertRule(Base, TimestampMixin, UserFKMixin, NullableOrganizationFKMixin):
     """
     [Object] 알림 규칙 모델:
     SystemUnit 전체의 상태를 감시하며, 설정된 임계치나 RL 모델의 판단에 따라 알림을 발생시킵니다.

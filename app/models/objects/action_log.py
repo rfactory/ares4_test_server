@@ -4,7 +4,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, Dict, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, DeviceFKMixin, NullableUserFKMixin, SystemUnitFKMixin
+from ..base_model import TimestampMixin, DeviceFKMixin, NullableUserFKMixin, SystemUnitFKMixin, NullableOrganizationFKMixin
 
 if TYPE_CHECKING:
     from app.models.objects.device import Device
@@ -26,7 +26,7 @@ class ActionStatus(str, enum.Enum):
     FAILED = 'FAILED'
     TIMEOUT = 'TIMEOUT'
 
-class ActionLog(Base, TimestampMixin, DeviceFKMixin, NullableUserFKMixin, SystemUnitFKMixin):
+class ActionLog(Base, TimestampMixin, DeviceFKMixin, NullableUserFKMixin, SystemUnitFKMixin, NullableOrganizationFKMixin):
     """
     [Object] AI 에이전트나 사용자가 내린 제어 명령 객체:
     결정의 근거(Snapshot)부터 실행 결과까지 기록하여 강화학습의 Reward 계산 및 디버깅에 사용합니다.

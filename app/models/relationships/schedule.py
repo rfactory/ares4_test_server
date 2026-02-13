@@ -5,7 +5,7 @@ from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
 
 from app.database import Base
-from ..base_model import TimestampMixin, SystemUnitFKMixin, UserFKMixin
+from ..base_model import TimestampMixin, SystemUnitFKMixin, UserFKMixin, NullableOrganizationFKMixin
 
 # 런타임 순환 참조 방지
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ class ConcurrencyPolicy(str, enum.Enum):
     FORCED = "FORCED"   # 중복 실행 허용
     REPLACE = "REPLACE" # 기존 작업 종료 후 새로 시작
 
-class Schedule(Base, TimestampMixin, SystemUnitFKMixin, UserFKMixin):
+class Schedule(Base, TimestampMixin, SystemUnitFKMixin, UserFKMixin, NullableOrganizationFKMixin):
     """
     [Instruction Layer] 스케줄 모델:
     Ares4 시스템의 자동화 실행 지시서입니다. 

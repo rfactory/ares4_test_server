@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy.sql import func
 
 from app.database import Base
-from ..base_model import TimestampMixin, LogBaseMixin, UserFKMixin, DeviceFKMixin, UserConsumableFKMixin
+from ..base_model import TimestampMixin, LogBaseMixin, UserFKMixin, DeviceFKMixin, UserConsumableFKMixin, NullableOrganizationFKMixin
 
 if TYPE_CHECKING:
     from app.models.objects.user import User
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.models.events_logs.user_consumable import UserConsumable
     from app.models.objects.organization import Organization
 
-class ConsumableUsageLog(Base, TimestampMixin, LogBaseMixin, UserFKMixin, DeviceFKMixin, UserConsumableFKMixin):
+class ConsumableUsageLog(Base, TimestampMixin, LogBaseMixin, UserFKMixin, DeviceFKMixin, UserConsumableFKMixin, NullableOrganizationFKMixin):
     """
     [Log] 소모품 사용 로그 모델:
     특정 사용자가 특정 장치에서 소모품을 사용한 기록을 저장합니다.

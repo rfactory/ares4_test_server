@@ -4,14 +4,14 @@ from typing import Optional, TYPE_CHECKING
 from datetime import datetime
 
 from app.database import Base
-from ..base_model import TimestampMixin
+from ..base_model import TimestampMixin, SystemUnitFKMixin
 
 if TYPE_CHECKING:
     from app.models.objects.device import Device
     from app.models.objects.user import User
     from app.models.objects.organization import Organization
 
-class ProvisioningToken(Base, TimestampMixin):
+class ProvisioningToken(Base, TimestampMixin, SystemUnitFKMixin):
     """
     [Object] 기기 프로비저닝 모델:
     기기의 최초 신원 확인 및 mTLS 인증서 발급을 위한 일회용 보안 토큰을 관리합니다.

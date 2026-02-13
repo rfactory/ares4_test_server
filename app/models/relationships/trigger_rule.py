@@ -2,14 +2,14 @@ from sqlalchemy import BigInteger, String, Text, JSON, Boolean, Integer, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, SystemUnitFKMixin, UserFKMixin, ExecutionMode, ConcurrencyPolicy
+from ..base_model import TimestampMixin, SystemUnitFKMixin, UserFKMixin, ExecutionMode, ConcurrencyPolicy, NullableOrganizationFKMixin
 
 if TYPE_CHECKING:
     from app.models.objects.system_unit import SystemUnit
     from app.models.objects.user import User
     from app.models.objects.organization import Organization
 
-class TriggerRule(Base, TimestampMixin, SystemUnitFKMixin, UserFKMixin):
+class TriggerRule(Base, TimestampMixin, SystemUnitFKMixin, UserFKMixin, NullableOrganizationFKMixin):
     """
     [Instruction Layer] 트리거 규칙 모델:
     현장의 상태(Observation)가 특정 조건(Condition)을 만족할 때 
