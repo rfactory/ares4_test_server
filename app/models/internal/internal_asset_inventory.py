@@ -16,18 +16,18 @@ class InternalAssetInventory(Base, TimestampMixin, AssetDefinitionFKMixin):
     """
     __tablename__ = "internal_asset_inventory"
     __table_args__ = (
-        # 특정 조직/개인의 특정 위치에는 하나의 부품 정의만 존재해야 함
-        UniqueConstraint('asset_definition_id', 'location', 'owner_organization_id', 'owner_user_id', name='_asset_owner_location_uc'),
-        # [XOR 제약] 소유자는 유저 혹은 조직 중 하나여야 함
+        UniqueConstraint('asset_definition_id', 'location', 'recorded_by_organization_id', 'serial_number', name='uq_asset_inventory_org'),
+        UniqueConstraint('asset_definition_id', 'location', 'recorded_by_user_id', 'serial_number', name='uq_asset_inventory_user'),
+        
         CheckConstraint(
-            "(owner_user_id IS NOT NULL AND owner_organization_id IS NULL) OR "
-            "(owner_user_id IS NULL AND owner_organization_id IS NOT NULL)",
+            "(recorded_by_user_id IS NOT NULL AND recorded_by_organization_id IS NULL) OR "
+            "(recorded_by_user_id IS NULL AND recorded_by_organization_id IS NOT NULL)",
             name="check_exclusive_asset_inventory_owner"
         ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    
+    serial_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     # 소유권
     recorded_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
     recorded_by_organization_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('organizations.id'), nullable=True, index=True)

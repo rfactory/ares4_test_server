@@ -68,14 +68,6 @@ class User(Base, TimestampMixin):
     
     # --- Relationships (Mapped 적용 완료) ---
     
-    # 3. 인프라 및 자산 권한 (Inventory & Asset Assignment)
-    owned_devices: Mapped[List["Device"]] = relationship("Device", back_populates="owner_user")
-    system_unit_assignments: Mapped[List["SystemUnitAssignment"]] = relationship(
-        "SystemUnitAssignment", 
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
-    
     # 1. 운영 및 활동 로그
     unit_activities: Mapped[List["UnitActivityLog"]] = relationship("UnitActivityLog", back_populates="user")
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="user")
