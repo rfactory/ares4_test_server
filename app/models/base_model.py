@@ -6,12 +6,10 @@ from datetime import datetime
 import enum
 
 class TimestampMixin:
-    """
-    모델에 `created_at` 및 `updated_at` 타임스탬프 컬럼을 추가하기 위한 Mixin입니다.
-    """
+    """모델에 `created_at` 및 `updated_at` 타임스탬프 컬럼을 추가하기 위한 Mixin입니다."""
     @declared_attr
     def created_at(cls) -> Mapped[datetime]:
-        return mapped_column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+        return mapped_column(DateTime(timezone=True), server_default=text("now()"), nullable=False, index=True)
 
     @declared_attr
     def updated_at(cls) -> Mapped[datetime]:
@@ -22,7 +20,7 @@ class TimestampMixin:
 class UserFKMixin:
     @declared_attr
     def user_id(cls) -> Mapped[int]:
-        return mapped_column(BigInteger, ForeignKey('users.id'), nullable=False)
+        return mapped_column(BigInteger, ForeignKey('users.id'), nullable=False, index=True)
 
 class NullableUserFKMixin:
     @declared_attr
@@ -32,12 +30,22 @@ class NullableUserFKMixin:
 class OrganizationFKMixin:
     @declared_attr
     def organization_id(cls) -> Mapped[int]:
-        return mapped_column(BigInteger, ForeignKey('organizations.id'), nullable=False)
+        return mapped_column(BigInteger, ForeignKey('organizations.id'), nullable=False, index=True)
 
 class NullableOrganizationFKMixin:
     @declared_attr
     def organization_id(cls) -> Mapped[Optional[int]]:
-        return mapped_column(BigInteger, ForeignKey('organizations.id'), nullable=True)
+        return mapped_column(BigInteger, ForeignKey('organizations.id'), index=True, nullable=True)
+
+class NullableOwnerUserFKMixin:
+    @declared_attr
+    def owner_user_id(cls) -> Mapped[Optional[int]]:
+        return mapped_column(BigInteger, ForeignKey('users.id'), index=True, nullable=True)
+    
+class NullableOwnerOrganizationFKMixin:
+    @declared_attr
+    def owner_organization_id(cls) -> Mapped[Optional[int]]:
+        return mapped_column(BigInteger, ForeignKey('organizations.id'), index=True, nullable=True)
 
 class SystemUnitFKMixin:
     @declared_attr
@@ -52,17 +60,17 @@ class NullableSystemUnitFKMixin:
 class DeviceFKMixin:
     @declared_attr
     def device_id(cls) -> Mapped[int]:
-        return mapped_column(BigInteger, ForeignKey('devices.id'), nullable=False)
+        return mapped_column(BigInteger, ForeignKey('devices.id'), nullable=False, index=True)
 
 class HardwareBlueprintFKMixin:
     @declared_attr
     def hardware_blueprint_id(cls) -> Mapped[int]:
-        return mapped_column(BigInteger, ForeignKey('hardware_blueprints.id'), nullable=False)
+        return mapped_column(BigInteger, ForeignKey('hardware_blueprints.id'), nullable=False, index=True)
 
 class NullableHardwareBlueprintFKMixin:
     @declared_attr
     def hardware_blueprint_id(cls) -> Mapped[Optional[int]]:
-        return mapped_column(BigInteger, ForeignKey('hardware_blueprints.id'), nullable=True)
+        return mapped_column(BigInteger, ForeignKey('hardware_blueprints.id'), index=True, nullable=True)
 
 # --- [추가] 이전 모델 파일들에서 사용한 핵심 Mixin ---
 class SupportedComponentFKMixin:
@@ -146,18 +154,21 @@ class LogBaseMixin:
     """로그 및 이벤트 모델을 위한 공통 필드입니다."""
     @declared_attr
     def event_type(cls) -> Mapped[str]:
-        return mapped_column(Enum('DEVICE', 'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 
-                                'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 
-                                'SERVER_CERTIFICATE_ACQUIRED_NEW', 'SERVER_CERTIFICATE_REUSED',
-                                'ORGANIZATION_CREATED', 'ORGANIZATION_UPDATED', 'ORGANIZATION_DELETED', 
-                                'LOGIN_SUCCESS', 'LOGIN_FAILURE', 'PASSWORD_RESET', 'ACCOUNT_LOCK',
-                                name='log_event_type', create_type=False), # create_type=False 추가
-                            nullable=False)
+        return mapped_column(Enum(
+            'DEVICE', 'SYSTEM_UNIT', 'ASSIGNMENT', # 도메인 확장 반영
+            'AUDIT', 'CONSUMABLE_USAGE', 'SERVER_MQTT_CERTIFICATE_ISSUED', 
+            'DEVICE_CERTIFICATE_CREATED', 'CERTIFICATE_REVOKED', 
+            'SERVER_CERTIFICATE_ACQUIRED_NEW', 'SERVER_CERTIFICATE_REUSED',
+            'ORGANIZATION_CREATED', 'ORGANIZATION_UPDATED', 'ORGANIZATION_DELETED', 
+            'LOGIN_SUCCESS', 'LOGIN_FAILURE', 'PASSWORD_RESET', 'ACCOUNT_LOCK',
+            name='log_event_type', create_type=False), 
+            nullable=False, index=True)
 
     @declared_attr
     def log_level(cls) -> Mapped[Optional[str]]:
-        return mapped_column(Enum('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', name='log_level', create_type=False), # create_type=False 추가
-                            nullable=True)
+        return mapped_column(Enum('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL', 
+                            name='log_level', create_type=False), 
+                            nullable=True, index=True)
 
     @declared_attr
     def description(cls) -> Mapped[Optional[str]]:

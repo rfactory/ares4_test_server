@@ -1,6 +1,7 @@
-from sqlalchemy import BigInteger, String, UniqueConstraint, Integer
+from sqlalchemy import BigInteger, String, UniqueConstraint, Integer, Enum as SA_Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, TYPE_CHECKING
+import enum
 
 from app.database import Base
 from ..base_model import TimestampMixin, DeviceFKMixin, DeviceComponentInstanceFKMixin
@@ -8,6 +9,10 @@ from ..base_model import TimestampMixin, DeviceFKMixin, DeviceComponentInstanceF
 if TYPE_CHECKING:
     from ..relationships.device_component_instance import DeviceComponentInstance
     from ..objects.device import Device
+
+class PinStatusEnum(str, enum.Enum):
+    ACTIVE = "ACTIVE"   # 정상 (운영 및 수정 가능)
+    FAULTY = "FAULTY"   # 고장 (제어 로직 제외 및 수정 불가)
 
 class DeviceComponentPinMapping(Base, TimestampMixin, DeviceFKMixin, DeviceComponentInstanceFKMixin):
     """
@@ -32,16 +37,24 @@ class DeviceComponentPinMapping(Base, TimestampMixin, DeviceFKMixin, DeviceCompo
     # 소프트웨어 레벨의 핀 동작 모드 (예: 'INPUT', 'OUTPUT', 'ALT0')
     pin_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) 
 
-    # --- Relationships (Mapped 적용) ---
+    # 상태 Enum 적용
+    status: Mapped[PinStatusEnum] = mapped_column(
+        SA_Enum(PinStatusEnum, name="pin_status_enum", create_type=True), # 최초 생성 시 True
+        default=PinStatusEnum.ACTIVE,
+        nullable=False
+    )
+
+    # --- Relationships ---
     
-    # 이 핀이 속한 부품 실체 (Instance)
     device_component_instance: Mapped["DeviceComponentInstance"] = relationship(
         "DeviceComponentInstance", 
         back_populates="pin_mappings"
     )
-
-    # (선택 사항) DeviceFKMixin을 통해 연결된 장치 본체와의 직접 관계
-    # device: Mapped["Device"] = relationship("Device", back_populates="...")
+    
+    device: Mapped["Device"] = relationship(
+        "Device", 
+        back_populates="pin_mappings"
+    )
 
     def __repr__(self):
-        return f"<DeviceComponentPinMapping(pin={self.pin_name}, physical_no={self.pin_number})>"
+        return f"<DeviceComponentPinMapping(pin={self.pin_name}, physical_no={self.pin_number}, status={self.status})>"

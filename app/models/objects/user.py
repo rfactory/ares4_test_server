@@ -6,26 +6,39 @@ from app.database import Base
 from ..base_model import TimestampMixin
 
 if TYPE_CHECKING:
-    from app.models.objects.system_unit import SystemUnit
-    from app.models.objects.action_log import ActionLog
-    from app.models.events_logs.audit_log import AuditLog
-    from app.models.events_logs.unit_activity_log import UnitActivityLog
+    # 1. 인벤토리 및 할당
+    from app.models.objects.device import Device
+    from app.models.relationships.system_unit_assignment import SystemUnitAssignment
+    
+    # 2. IAM 및 권한 체계
     from app.models.relationships.user_organization_role import UserOrganizationRole
     from app.models.objects.access_request import AccessRequest
-    from app.models.relationships.user_device import UserDevice
-    from app.models.events_logs.user_consumable import UserConsumable
-    from app.models.events_logs.consumable_usage_log import ConsumableUsageLog
-    from app.models.relationships.user_subscription import UserSubscription
+    
+    # 3. 자동화 및 모니터링 (공유 기능)
     from app.models.relationships.schedule import Schedule
     from app.models.relationships.alert_rule import AlertRule
     from app.models.relationships.trigger_rule import TriggerRule
+    
+    # 4. 운영 로그 및 데이터 (공유 기능)
+    from app.models.events_logs.audit_log import AuditLog
+    from app.models.objects.action_log import ActionLog
+    from app.models.events_logs.unit_activity_log import UnitActivityLog
     from app.models.events_logs.alert_event import AlertEvent
+    from app.models.events_logs.consumable_usage_log import ConsumableUsageLog
+
+    # 5. 시스템 유지보수 및 보안 (공유 기능)
     from app.models.events_logs.firmware_update import FirmwareUpdate
+    from app.models.objects.provisioning_token import ProvisioningToken
     from app.models.objects.refresh_token import RefreshToken
+
+    # 6. 비즈니스 및 구독
+    from app.models.relationships.user_subscription import UserSubscription
+    from app.models.events_logs.user_consumable import UserConsumable
+
+    # 7. 내부 자산 관리 (MP3 제조사 재고 관리 대응)
     from app.models.internal.internal_asset_inventory import InternalAssetInventory
     from app.models.internal.internal_asset_purchase_record import InternalAssetPurchaseRecord
-    from app.models.objects.provisioning_token import ProvisioningToken
-
+    
 class User(Base, TimestampMixin):
     """
     [Object] 사용자 모델:
@@ -55,6 +68,14 @@ class User(Base, TimestampMixin):
     
     # --- Relationships (Mapped 적용 완료) ---
     
+    # 3. 인프라 및 자산 권한 (Inventory & Asset Assignment)
+    owned_devices: Mapped[List["Device"]] = relationship("Device", back_populates="owner_user")
+    system_unit_assignments: Mapped[List["SystemUnitAssignment"]] = relationship(
+        "SystemUnitAssignment", 
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    
     # 1. 운영 및 활동 로그
     unit_activities: Mapped[List["UnitActivityLog"]] = relationship("UnitActivityLog", back_populates="user")
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="user")
@@ -75,9 +96,7 @@ class User(Base, TimestampMixin):
         "AccessRequest", foreign_keys="[AccessRequest.initiated_by_user_id]", back_populates="initiated_by"
     )
 
-    # 3. 인프라 및 자산 소유
-    system_units: Mapped[List["SystemUnit"]] = relationship("SystemUnit", back_populates="user")
-    devices: Mapped[List["UserDevice"]] = relationship("UserDevice", back_populates="user")
+    
     subscriptions: Mapped[List["UserSubscription"]] = relationship("UserSubscription", back_populates="user")
     user_consumables: Mapped[List["UserConsumable"]] = relationship("UserConsumable", back_populates="user")
     
@@ -101,7 +120,7 @@ class User(Base, TimestampMixin):
     consumable_usage_log_entries: Mapped[List["ConsumableUsageLog"]] = relationship("ConsumableUsageLog", back_populates="user")
     issued_provisioning_tokens: Mapped[List["ProvisioningToken"]] = relationship(
         "ProvisioningToken",
-        back_populates="issued_by_user",  # ProvisioningToken 모델 내의 User 참조 필드명 확인 필요
+        back_populates="issued_by_user",
         cascade="all, delete-orphan"
     )
 
