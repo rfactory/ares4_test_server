@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 
     # 5. 시스템 유지보수 및 보안 (공유 기능)
     from app.models.events_logs.firmware_update import FirmwareUpdate
-    from app.models.objects.provisioning_token import ProvisioningToken
     from app.models.objects.refresh_token import RefreshToken
 
     # 6. 비즈니스 및 구독
@@ -110,11 +109,7 @@ class User(Base, TimestampMixin):
     )
     refresh_tokens: Mapped[List["RefreshToken"]] = relationship("RefreshToken", back_populates="user")
     consumable_usage_log_entries: Mapped[List["ConsumableUsageLog"]] = relationship("ConsumableUsageLog", back_populates="user")
-    issued_provisioning_tokens: Mapped[List["ProvisioningToken"]] = relationship(
-        "ProvisioningToken",
-        back_populates="issued_by_user",
-        cascade="all, delete-orphan"
-    )
+    
     owned_devices: Mapped[List["Device"]] = relationship(
         "Device", 
         back_populates="owner_user",

@@ -1,6 +1,6 @@
 from sqlalchemy import BigInteger, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from sqlalchemy.ext.declarative import declared_attr # [에러 해결] 꼭 확인하세요!
+from sqlalchemy.ext.declarative import declared_attr
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
 
@@ -9,20 +9,20 @@ from ..base_model import TimestampMixin, SystemUnitFKMixin
 
 if TYPE_CHECKING:
     from app.models.objects.system_unit import SystemUnit
-    from app.models.objects.user import User
-    from app.models.objects.organization import Organization
+    # User, Organization import 제거 (더 이상 참조하지 않음)
 
 class ProvisioningToken(Base, TimestampMixin, SystemUnitFKMixin):
     """
-    [Object] 기기 프로비저닝 모델:
-    [핵심 설계] Device와 직접 연결되지 않음. 
-    QR 등록 시 이 토큰을 통해 SystemUnit을 특정하고 사용자를 할당합니다.
+    [Object] 기기 프로비저닝 모델 (순수 입장권):
+    특정 사용자나 조직에 종속되지 않으며, 오직 '물리적 기기(SystemUnit)'와 'QR 코드'를 연결합니다.
+    이 토큰이 검증되면 SystemUnitAssignment 테이블에 소유권이 기록됩니다.
     """
     __tablename__ = "provisioning_tokens"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     
     # [1:1 고정] SystemUnitFKMixin의 system_unit_id를 Unique FK로 재정의
+    # 하나의 유닛에는 하나의 활성 토큰만 존재해야 하므로 unique=True 유지
     @declared_attr
     def system_unit_id(cls) -> Mapped[int]:
         return mapped_column(BigInteger, ForeignKey("system_units.id"), unique=True, nullable=False)
@@ -34,29 +34,20 @@ class ProvisioningToken(Base, TimestampMixin, SystemUnitFKMixin):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
-    # 발급 주체 정보
-    issued_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
-    issued_by_organization_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("organizations.id"), nullable=True)
+    # [수정] used_at은 단순 기록용으로 남겨둠 (관계 설정 X)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # [삭제] issued_by 관련 컬럼들 제거함
 
     # --- Relationships ---
     
-    # 1. 유닛과의 1:1 관계 (Device 관계는 완전히 삭제됨)
+    # 오직 유닛만 바라봅니다.
     system_unit: Mapped["SystemUnit"] = relationship(
         "SystemUnit", 
-        back_populates="provisioning_token" # SystemUnit 모델의 단수형 필드와 매칭
+        back_populates="provisioning_token" # SystemUnit 모델의 변수명과 일치
     )
     
-    # 2. 발급 담당자 및 조직 정보
-    issued_by_user: Mapped[Optional["User"]] = relationship(
-        "User", 
-        foreign_keys=[issued_by_user_id], 
-        back_populates="issued_provisioning_tokens"
-    )
-    organization: Mapped[Optional["Organization"]] = relationship(
-        "Organization", 
-        foreign_keys=[issued_by_organization_id], 
-        back_populates="provisioning_tokens"
-    )
+    # [삭제] user, organization 관계 제거함
 
     def __repr__(self):
         return f"<ProvisioningToken(unit_id={self.system_unit_id}, is_used={self.is_used})>"

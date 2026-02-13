@@ -29,7 +29,6 @@ if TYPE_CHECKING:
 
     # 5. [공유] 유지보수 및 보안 자산
     from app.models.events_logs.firmware_update import FirmwareUpdate
-    from app.models.objects.provisioning_token import ProvisioningToken
 
     # 6. 비즈니스 및 구독
     from app.models.objects.organization_type import OrganizationType
@@ -106,7 +105,6 @@ class Organization(Base, TimestampMixin, OrganizationTypeFKMixin):
     
     # 5. 시스템 유지보수 (Maintenance - User와 공유)
     firmware_updates: Mapped[List["FirmwareUpdate"]] = relationship("FirmwareUpdate", back_populates="organization") # [추가]
-    provisioning_tokens: Mapped[List["ProvisioningToken"]] = relationship("ProvisioningToken", back_populates="organization") # [추가]
     
     # 6. 비즈니스 자산 및 구독
     organization_type: Mapped["OrganizationType"] = relationship("OrganizationType", back_populates="organizations")
