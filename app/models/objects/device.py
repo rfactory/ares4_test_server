@@ -114,7 +114,7 @@ class Device(Base, TimestampMixin, NullableHardwareBlueprintFKMixin, NullableSys
     
     # 2. 인프라 관계 (Deployment)
     # NullableSystemUnitFKMixin에서 system_unit_id를 가져오므로, 여기서는 할당된 유닛과의 관계 정의
-    system_unit: Mapped[Optional["SystemUnit"]] = relationship("SystemUnit", back_populates="devices")
+    system_unit: Mapped[Optional["SystemUnit"]] = relationship("SystemUnit", back_populates="devices", foreign_keys="[Device.system_unit_id]")
         
     # 3. 설계 및 역할
     hardware_blueprint: Mapped["HardwareBlueprint"] = relationship("HardwareBlueprint", back_populates="devices")

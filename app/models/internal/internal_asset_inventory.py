@@ -2,14 +2,14 @@ from sqlalchemy import BigInteger, String, ForeignKey, UniqueConstraint, Integer
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, AssetDefinitionFKMixin
+from ..base_model import TimestampMixin, AssetDefinitionFKMixin, NullableOrganizationFKMixin
 
 if TYPE_CHECKING:
     from .internal_asset_definition import InternalAssetDefinition
     from ..objects.user import User
     from ..objects.organization import Organization
 
-class InternalAssetInventory(Base, TimestampMixin, AssetDefinitionFKMixin):
+class InternalAssetInventory(Base, TimestampMixin, AssetDefinitionFKMixin, NullableOrganizationFKMixin):
     """
     [Inventory] 내부 자산 재고 모델:
     특정 부품(AssetDefinition)이 위치별로 몇 개 남아있는지 실제 수량을 관리합니다.
@@ -52,4 +52,8 @@ class InternalAssetInventory(Base, TimestampMixin, AssetDefinitionFKMixin):
         foreign_keys=[last_updated_by_user_id],
         back_populates="internal_asset_inventory_updates" 
     )
-    owner_organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="internal_asset_inventory_updates")
+    owner_organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", 
+        foreign_keys=[recorded_by_organization_id], # 명시적 지정
+        back_populates="internal_asset_inventory_updates"
+    )

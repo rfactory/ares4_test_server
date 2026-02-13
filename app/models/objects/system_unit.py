@@ -113,8 +113,11 @@ class SystemUnit(Base, TimestampMixin, ProductLineFKMixin):
     )
 
     # 5. 프로비저닝 및 비즈니스
-    provisioning_tokens: Mapped[List["ProvisioningToken"]] = relationship(
-        "ProvisioningToken", back_populates="system_unit", cascade="all, delete-orphan"
+    provisioning_token: Mapped[Optional["ProvisioningToken"]] = relationship(
+        "ProvisioningToken", 
+        back_populates="system_unit", 
+        uselist=False, # 이 설정이 있어야 1:1 관계가 성립합니다.
+        cascade="all, delete-orphan"
     )
     subscription: Mapped[Optional["OrganizationSubscription"]] = relationship(
         "OrganizationSubscription", back_populates="system_unit", uselist=False

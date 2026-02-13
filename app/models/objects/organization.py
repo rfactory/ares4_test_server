@@ -115,14 +115,16 @@ class Organization(Base, TimestampMixin, OrganizationTypeFKMixin):
     # 7. 내부 자산 관리 (User 모델의 6번 항목과 대응)
     internal_asset_inventory_updates: Mapped[List["InternalAssetInventory"]] = relationship(
         "InternalAssetInventory", 
-        foreign_keys="[InternalAssetInventory.last_updated_by_organization_id]", 
-        back_populates="last_updated_by_organization"
-    ) # [추가]
+        # [수정] last_updated_by_... 가 아니라 실제 컬럼명인 recorded_by_... 로 변경
+        foreign_keys="[InternalAssetInventory.recorded_by_organization_id]", 
+        back_populates="owner_organization" # InternalAssetInventory의 관계명과 일치
+    ) 
+    
     internal_asset_purchase_records: Mapped[List["InternalAssetPurchaseRecord"]] = relationship(
         "InternalAssetPurchaseRecord", 
         foreign_keys="[InternalAssetPurchaseRecord.recorded_by_organization_id]", 
         back_populates="recorded_by_organization"
-    ) # [추가]
+    )
 
     def __repr__(self):
         return f"<Organization(id={self.id}, name={self.company_name})>"

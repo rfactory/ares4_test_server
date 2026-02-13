@@ -49,4 +49,8 @@ class InternalAssetPurchaseRecord(Base, TimestampMixin, AssetDefinitionFKMixin):
     
     # 이 기록을 생성한 담당자 (User 모델의 back_populates와 매칭)
     recorded_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[recorded_by_user_id], back_populates="internal_asset_purchase_records")
-    recorded_by_organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="internal_asset_purchase_records") # [조직에 추가해야 함]
+    recorded_by_organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", 
+        foreign_keys=[recorded_by_organization_id], # 명시적 지정
+        back_populates="internal_asset_purchase_records"
+    )

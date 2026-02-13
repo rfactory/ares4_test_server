@@ -115,6 +115,16 @@ class User(Base, TimestampMixin):
         back_populates="issued_by_user",
         cascade="all, delete-orphan"
     )
+    owned_devices: Mapped[List["Device"]] = relationship(
+        "Device", 
+        back_populates="owner_user",
+        cascade="all, delete-orphan"
+    )
+    system_unit_assignments: Mapped[List["SystemUnitAssignment"]] = relationship(
+        "SystemUnitAssignment", 
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
     # 6. 내부 자산 관리 (Inventory & Purchase)
     internal_asset_inventory_updates: Mapped[List["InternalAssetInventory"]] = relationship(
