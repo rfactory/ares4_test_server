@@ -20,9 +20,7 @@ from .objects.provisioning_token import ProvisioningToken
 
 
 from .relationships.user_organization_role import UserOrganizationRole
-from .relationships.organization_device import OrganizationDevice
 from .relationships.organization_subscription import OrganizationSubscription
-from .relationships.user_device import UserDevice
 from .relationships.role_permission import RolePermission
 from .relationships.device_component_instance import DeviceComponentInstance
 from .relationships.device_component_pin_mapping import DeviceComponentPinMapping
@@ -35,6 +33,7 @@ from .relationships.schedule import Schedule
 from .relationships.trigger_rule import TriggerRule
 from .relationships.user_subscription import UserSubscription
 from .relationships.supported_component_metadata import SupportedComponentMetadata
+from .relationships.system_unit_assignment import SystemUnitAssignment
 from .relationships.device_role_assignment import DeviceRoleAssignment
 from .relationships.plan_applicable_product_line import PlanApplicableProductLine
 
@@ -82,9 +81,7 @@ __all__ = [
     "ProvisioningToken",
 
     "UserOrganizationRole",
-    "OrganizationDevice",
     "OrganizationSubscription",
-    "UserDevice",
     "RolePermission",
     "DeviceComponentInstance",
     "DeviceComponentPinMapping",
@@ -97,6 +94,7 @@ __all__ = [
     "TriggerRule",
     "UserSubscription",
     "SupportedComponentMetadata",
+    "SystemUnitAssignment",
     "DeviceRoleAssignment",
     "PlanApplicableProductLine",
 

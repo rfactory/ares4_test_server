@@ -3,12 +3,10 @@ from sqlalchemy import BigInteger, String, Enum, JSON, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, List, TYPE_CHECKING
 from app.database import Base
-from ..base_model import TimestampMixin, ProductLineFKMixin, NullableOrganizationFKMixin, NullableUserFKMixin
+from ..base_model import TimestampMixin, ProductLineFKMixin
 
 if TYPE_CHECKING:
     from app.models.objects.product_line import ProductLine
-    from app.models.objects.organization import Organization
-    from app.models.objects.user import User
     from app.models.objects.device import Device
     from app.models.relationships.system_unit_assignment import SystemUnitAssignment
     from app.models.events_logs.telemetry_data import TelemetryData
@@ -32,7 +30,7 @@ class UnitStatus(str, enum.Enum):
     MAINTENANCE = 'MAINTENANCE'
     PROVISIONING = 'PROVISIONING'
 
-class SystemUnit(Base, TimestampMixin, ProductLineFKMixin, NullableOrganizationFKMixin, NullableUserFKMixin):
+class SystemUnit(Base, TimestampMixin, ProductLineFKMixin):
     """
     [Object] 시스템 유닛 (The Hub):
     Ares4 시스템의 모든 데이터와 로직이 집약되는 최상위 운영 단위입니다.
@@ -73,8 +71,6 @@ class SystemUnit(Base, TimestampMixin, ProductLineFKMixin, NullableOrganizationF
     
     # [정리] 직접 관계는 물리적/법적 소속 정보 조회용으로만 유지 (Optional)
     product_line: Mapped["ProductLine"] = relationship("ProductLine", back_populates="system_units")
-    organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="system_units")
-    user: Mapped[Optional["User"]] = relationship("User", back_populates="system_units")
 
     # 2. 하부 구조 (하드웨어 클러스터)
     devices: Mapped[List["Device"]] = relationship(
