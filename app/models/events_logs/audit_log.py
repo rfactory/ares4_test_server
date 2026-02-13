@@ -7,7 +7,8 @@ from ..base_model import TimestampMixin, LogBaseMixin, NullableUserFKMixin
 # 런타임 순환 참조 방지
 if TYPE_CHECKING:
     from app.models.objects.user import User
-    from .audit_log_detail import AuditLogDetail # 상세 모델도 추가
+    from .audit_log_detail import AuditLogDetail
+    from app.models.objects.organization import Organization
 
 class AuditLog(Base, TimestampMixin, LogBaseMixin, NullableUserFKMixin):
     """
@@ -37,6 +38,9 @@ class AuditLog(Base, TimestampMixin, LogBaseMixin, NullableUserFKMixin):
     
     # 1. User와의 관계 (NullableUserFKMixin 기반)
     user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", back_populates="audit_logs"
+    )
     
     # 2. AuditLogDetail과의 관계 (1:N)
     # Mapped[List["..." ]] 스타일로 통일 권장

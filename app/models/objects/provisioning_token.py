@@ -9,6 +9,7 @@ from ..base_model import TimestampMixin
 if TYPE_CHECKING:
     from app.models.objects.device import Device
     from app.models.objects.user import User
+    from app.models.objects.organization import Organization
 
 class ProvisioningToken(Base, TimestampMixin):
     """
@@ -37,7 +38,9 @@ class ProvisioningToken(Base, TimestampMixin):
     issued_by_user_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("users.id"), nullable=True
     )
-
+    issued_by_organization_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("organizations.id"), nullable=True
+    )
     # --- Relationships (Mapped 적용 완료) ---
     
     # 1:1 관계 (Device 모델에서 uselist=False 설정 필요)
@@ -47,10 +50,12 @@ class ProvisioningToken(Base, TimestampMixin):
     
     # 발급자 정보
     issued_by_user: Mapped[Optional["User"]] = relationship(
-        "User", 
-        foreign_keys=[issued_by_user_id],
-        back_populates="issued_provisioning_tokens"
+        "User", foreign_keys=[issued_by_user_id], back_populates="issued_provisioning_tokens"
     )
-
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", 
+        foreign_keys=[issued_by_organization_id], 
+        back_populates="provisioning_tokens"
+    )
     def __repr__(self):
         return f"<ProvisioningToken(device_id={self.device_id}, is_used={self.is_used})>"

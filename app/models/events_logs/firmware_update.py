@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.objects.user import User
     from app.models.objects.device import Device
     from app.models.objects.hardware_blueprint import HardwareBlueprint
+    from app.models.objects.organization import Organization
 
 
 class FirmwareUpdate(Base, TimestampMixin, DeviceFKMixin, HardwareBlueprintFKMixin):
@@ -29,10 +30,13 @@ class FirmwareUpdate(Base, TimestampMixin, DeviceFKMixin, HardwareBlueprintFKMix
 
     # 명시적으로 외래 키 컬럼 정의
     initiated_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('users.id'), nullable=True) # 펌웨어 업데이트를 시작한 사용자 ID
-
+    initiated_by_organization_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey('organizations.id'), nullable=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # 펌웨어 업데이트에 대한 추가 메모
 
     # --- Relationships ---
     device: Mapped["Device"] = relationship("Device", back_populates="firmware_updates") # 펌웨어 업데이트가 적용된 장치 정보
     hardware_blueprint: Mapped["HardwareBlueprint"] = relationship("HardwareBlueprint", back_populates="firmware_updates") # 이 펌웨어 업데이트가 적용되는 하드웨어 블루프린트 정보
     initiated_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[initiated_by_user_id], back_populates="firmware_updates_initiated") # 펌웨어 업데이트를 시작한 사용자 정보
+    organization: Mapped[Optional["Organization"]] = relationship("Organization", foreign_keys=[initiated_by_organization_id], back_populates="firmware_updates")

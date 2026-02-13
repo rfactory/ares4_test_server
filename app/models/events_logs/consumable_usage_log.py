@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.objects.user import User
     from app.models.objects.device import Device
     from app.models.events_logs.user_consumable import UserConsumable
+    from app.models.objects.organization import Organization
 
 class ConsumableUsageLog(Base, TimestampMixin, LogBaseMixin, UserFKMixin, DeviceFKMixin, UserConsumableFKMixin):
     """
@@ -37,6 +38,9 @@ class ConsumableUsageLog(Base, TimestampMixin, LogBaseMixin, UserFKMixin, Device
     # --- Relationships ---
     user: Mapped["User"] = relationship(
         "User", back_populates="consumable_usage_log_entries"
+    )
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", back_populates="consumable_usage_logs"
     )
     device: Mapped["Device"] = relationship(
         "Device", back_populates="consumable_usage_logs"

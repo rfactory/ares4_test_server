@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.objects.user import User
     from app.models.objects.device import Device
     from app.models.relationships.alert_rule import AlertRule
+    from app.models.objects.organization import Organization
 
 
 class AlertEvent(Base, TimestampMixin, DeviceFKMixin, AlertRuleFKMixin):
@@ -36,5 +37,6 @@ class AlertEvent(Base, TimestampMixin, DeviceFKMixin, AlertRuleFKMixin):
     # --- Relationships ---
     device: Mapped["Device"] = relationship("Device", back_populates="alert_events") # 이 알림 이벤트를 발생시킨 장치 정보
     user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id], back_populates="alert_events_generated")# 이 알림 이벤트를 발생시킨 사용자 정보
+    organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="alert_events")
     alert_rule: Mapped["AlertRule"] = relationship("AlertRule", back_populates="alert_events") # 이 알림 이벤트를 생성한 알림 규칙 정보
     acknowledged_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[acknowledged_by_user_id], back_populates="alert_events_acknowledged") # 이 알림 이벤트를 확인한 사용자 정보

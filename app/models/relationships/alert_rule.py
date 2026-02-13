@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.objects.device import Device
     from app.models.objects.user import User
     from app.models.events_logs.alert_event import AlertEvent
+    from app.models.objects.organization import Organization
 
 # 1. 알림 심각도 관리를 위한 Enum
 class AlertSeverity(str, enum.Enum):
@@ -61,7 +62,9 @@ class AlertRule(Base, TimestampMixin, UserFKMixin):
     system_unit: Mapped["SystemUnit"] = relationship("SystemUnit", back_populates="alert_rules")
     device: Mapped[Optional["Device"]] = relationship("Device", back_populates="alert_rules")
     user: Mapped["User"] = relationship("User", back_populates="alert_rules")
-    
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", back_populates="alert_rules"
+    )
     # 이 규칙에 의해 발생한 실제 알림 사건들
     alert_events: Mapped[List["AlertEvent"]] = relationship(
         "AlertEvent", back_populates="alert_rule", cascade="all, delete-orphan"

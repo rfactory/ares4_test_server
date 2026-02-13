@@ -7,6 +7,7 @@ from ..base_model import TimestampMixin, SystemUnitFKMixin, UserFKMixin, Executi
 if TYPE_CHECKING:
     from app.models.objects.system_unit import SystemUnit
     from app.models.objects.user import User
+    from app.models.objects.organization import Organization
 
 class TriggerRule(Base, TimestampMixin, SystemUnitFKMixin, UserFKMixin):
     """
@@ -59,6 +60,9 @@ class TriggerRule(Base, TimestampMixin, SystemUnitFKMixin, UserFKMixin):
     )
     user: Mapped["User"] = relationship(
         "User", back_populates="trigger_rules"
+    )
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", back_populates="trigger_rules"
     )
 
     def __repr__(self):

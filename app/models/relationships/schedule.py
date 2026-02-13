@@ -11,6 +11,7 @@ from ..base_model import TimestampMixin, SystemUnitFKMixin, UserFKMixin
 if TYPE_CHECKING:
     from app.models.objects.system_unit import SystemUnit
     from app.models.objects.user import User
+    from app.models.objects.organization import Organization
 
 class ExecutionMode(str, enum.Enum):
     """
@@ -98,6 +99,9 @@ class Schedule(Base, TimestampMixin, SystemUnitFKMixin, UserFKMixin):
     )
     user: Mapped["User"] = relationship(
         "User", back_populates="schedules"
+    )
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", back_populates="schedules"
     )
 
     def __repr__(self):

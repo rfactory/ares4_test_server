@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.objects.user import User
     from app.models.objects.system_unit import SystemUnit
     from ..events_logs.observation_snapshot import ObservationSnapshot
+    from app.models.objects.organization import Organization
 
 # 1. 제어 주체 및 상태 관리를 위한 Enum 정의
 class ActorType(str, enum.Enum):
@@ -85,4 +86,7 @@ class ActionLog(Base, TimestampMixin, DeviceFKMixin, NullableUserFKMixin, System
     # 명령을 내린 사용자 (NullableUserFKMixin의 user_id 참조)
     performed_by_user: Mapped[Optional["User"]] = relationship(
         "User", back_populates="action_logs"
+    )
+    organization: Mapped[Optional["Organization"]] = relationship(
+        "Organization", back_populates="action_logs"
     )
