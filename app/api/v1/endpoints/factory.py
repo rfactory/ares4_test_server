@@ -41,7 +41,7 @@ async def factory_auto_enroll(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {e}")
     
 # ---------------------------------------------------------
-# 2. 사용자 기기 점유 (신규 추가)
+# 2. 사용자 기기 점유
 # ---------------------------------------------------------
 @router.post("/claim", status_code=status.HTTP_200_OK)
 def claim_device(

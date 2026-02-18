@@ -11,6 +11,7 @@ from app.domains.inter_domain.validators.factory_enrollment.provider import fact
 # 2. 기기 관리 (기존 Auto-Enroll용)
 from app.domains.inter_domain.device_management.device_query_provider import device_management_query_provider
 from app.domains.inter_domain.device_management.device_command_provider import device_management_command_provider
+from app.domains.inter_domain.hardware_blueprint.hardware_blueprint_command_provider import hardware_blueprint_command_provider
 
 # 3. 토큰 & 할당 (신규 Claim용)
 from app.domains.inter_domain.provisioning_token.provisioning_token_query_provider import provisioning_token_query_provider
@@ -59,14 +60,8 @@ class FactoryEnrollmentPolicy:
     
     def claim_unit(self, db: Session, token_value: str, claimer_user_id: int) -> Dict[str, Any]:
         """
-        [User Scenario] QR 토큰을 사용하여 시스템 유닛의 소유권을 획득합니다.
-        
-        Flow:
-        1. Token 조회 (Query)
-        2. Token 유효성 검증 (Validator)
-        3. 소유권 할당 실행 (Command - Assignment)
-        4. Token 사용 완료 처리 (Command - ProvisioningToken)
-        5. 결과 반환 및 감사 로그
+        [User Scenario] QR 토큰을 사용하여 시스템 유닛의 소유권을 사용자에게 할당합니다.
+        실제 기기(Device)와의 물리적 연결 및 핀맵 복제는 별도의 연결 로직에서 처리합니다.
         """
         try:
             # 1. 토큰 데이터 조회
@@ -74,12 +69,11 @@ class FactoryEnrollmentPolicy:
             if not token:
                 raise NotFoundError(resource_name="ProvisioningToken", resource_id=token_value)
 
-            # 2. 순수 로직 검증 (Validator 위임)
+            # 2. 순수 로직 검증 (Validator)
             validator = factory_enrollment_validator_provider.get_validator()
             validator.validate_token_for_claim(token)
             
-            # 3. 소유권 할당 (XOR: 유저에게 OWNER 권한 부여)
-            # 기존 소유자가 있다면 삭제하고 새로 할당하는 로직이 CommandService에 포함됨
+            # 3. 소유권 할당 (OWNER 권한 부여)
             assignment = system_unit_assignment_command_provider.assign_owner(
                 db=db, 
                 unit_id=token.system_unit_id, 
