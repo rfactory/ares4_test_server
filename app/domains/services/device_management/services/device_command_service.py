@@ -210,7 +210,7 @@ class DeviceManagementCommandService:
         db.flush()
         return db_obj
     
-    def assign_to_unit(self, db: Session, *, device_id: int, unit_id: int) -> DBDevice:
+    def assign_to_unit(self, db: Session, *, device_id: int, unit_id: int, role: str) -> DBDevice:
         """
         [The Binder]
         기기를 특정 시스템 유닛에 귀속시키고 상태를 PROVISIONED로 변경합니다.
@@ -221,6 +221,9 @@ class DeviceManagementCommandService:
 
         device.system_unit_id = unit_id
         device.status = DeviceStatusEnum.PROVISIONED  # 결합 상태로 변경
+        
+        if hasattr(device, 'cluster_role'):
+            device.cluster_role = role
         
         db.add(device)
         db.flush()
@@ -235,8 +238,11 @@ class DeviceManagementCommandService:
         if not device:
             raise NotFoundError("Device", f"ID {device_id}를 찾을 수 없습니다.")
 
-        device.system_unit_id = None  # 소속 해제
-        device.status = DeviceStatusEnum.PENDING  # 다시 대기 상태로 변경
+        device.system_unit_id = None
+        device.status = DeviceStatusEnum.PENDING
+        
+        if hasattr(device, 'cluster_role'):
+            device.cluster_role = None
         
         db.add(device)
         db.flush()

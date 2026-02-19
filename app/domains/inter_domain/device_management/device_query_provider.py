@@ -32,5 +32,13 @@ class DeviceManagementQueryProvider:
         CRUD 단계에서 joinedload가 적용되어 소유권(Org, User) 정보가 포함된 DeviceRead를 반환합니다.
         """
         return device_management_query_service.get_device_by_identifier(db, identifier=identifier)
+    
+    def get_count_by_unit(self, db: Session, *, unit_id: int) -> int:
+        """[Inter-Domain] 유닛별 기기 수량 조회 인터페이스"""
+        return device_management_query_service.get_count_by_unit(db, unit_id=unit_id)
+    
+    def has_master_device(self, db: Session, *, unit_id: int) -> bool:
+        """[Inter-Domain] 유닛 내 마스터 존재 여부 확인 인터페이스"""
+        return device_management_query_service.has_master_device(db, unit_id=unit_id)
 
 device_management_query_provider = DeviceManagementQueryProvider()

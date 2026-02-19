@@ -1,6 +1,7 @@
 import logging
 from sqlalchemy.orm import Session
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from app.core.exceptions import NotFoundError
 
 # --- [1] Inter-Domain Providers (조회 및 실행 인터페이스) ---
 # 1. 설계도(Blueprint) 도메인: 레시피 조회
@@ -17,8 +18,12 @@ from app.domains.inter_domain.device_component_management.device_component_comma
 from app.domains.inter_domain.system_unit.system_unit_query_provider import system_unit_query_provider
 
 # 5. 공통 기능
+from app.domains.inter_domain.system_unit_assignment.system_unit_assignment_query_provider import system_unit_assignment_query_provider
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 from app.models.objects.user import User
+
+# 6. 검증 로직 (Validator) - 정책에서 직접 호출하여 판단을 위임
+from app.domains.action_authorization.validators.system_unit_binding.validator import system_unit_binding_validator
 
 logger = logging.getLogger(__name__)
 
@@ -35,38 +40,58 @@ class SystemUnitBindingPolicy:
         actor_user: User, 
         unit_id: int, 
         device_id: int, 
-        role: str = "MASTER"
+        role: str
     ) -> Dict[str, Any]:
         """
         [Scenario C 연동] 기기를 유닛에 연결하고 초기 핀맵을 복제합니다.
         """
         try:
-            # STEP 1: 데이터 수집
-            unit = system_unit_query_provider.get_system_unit(db, id=unit_id)
-            device = device_management_query_provider.get_by_id(db, id=device_id)
+            # 1. 데이터 수집
+            unit = system_unit_query_provider.get_by_id(db, unit_id=unit_id)
+            if not unit:
+                raise NotFoundError("SystemUnit", f"ID {unit_id}를 찾을 수 없습니다.")
+            device = device_management_query_provider.get_device_by_id(db, id=device_id)
+            if not device:
+                raise NotFoundError("Device", f"ID {device_id}를 찾을 수 없습니다.")
+            blueprint = hardware_blueprint_query_provider.get_blueprint_by_id(db, id=unit.product_line_id)
+            if not blueprint:
+                raise NotFoundError("HardwareBlueprint", f"ID {unit.product_line_id}를 찾을 수 없습니다.")
 
-            # STEP 2: 검증 (Validator 호출 - 프로바이더가 없다면 직접 인스턴스화)
-            # 여기서는 별도의 Validator 클래스를 호출하여 판단을 위임합니다.
-            from app.domains.action_authorization.validators.system_unit_binding.validator import system_unit_binding_validator
+            ## 2. 실제 상태 확인
+            is_unit_owner = system_unit_assignment_query_provider.is_user_assigned_to_unit(
+                db, user_id=actor_user.id, unit_id=unit_id
+            )
+            current_count = device_management_query_provider.get_count_by_unit(
+                db, unit_id=unit_id
+            )
+            max_capacity = getattr(blueprint, 'max_devices')
+
+            # [보완] 해당 유닛에 이미 마스터가 있는지 확인하는 팩트 수집 필요
+            has_master = device_management_query_provider.has_master_device(db, unit_id=unit_id)
+
+            # 3. 엄격한 검증
             system_unit_binding_validator.validate_binding_eligibility(
-                db=db, actor_user=actor_user, unit=unit, device=device
+                actor_user_id=actor_user.id,
+                device_obj=device,
+                unit_obj=unit,
+                is_unit_owner=is_unit_owner,
+                current_device_count=current_count,
+                max_capacity=max_capacity,
+                requested_role=role,
+                has_existing_master=has_master
             )
 
-            # STEP 3: 레시피(회로도) 확보
-            # 유닛이 어떤 설계도(Blueprint)를 사용하는지 확인하여 핀 정보를 가져옵니다.
+            # 4. 레시피 확보
             recipe = hardware_blueprint_query_provider.get_blueprint_recipe(
-                db, blueprint_id=unit.product_line.blueprint_id
+                db, blueprint_id=blueprint.id
             )
 
-            # STEP 4: 실행 명령 (Command)
-            
-            # A. 기기의 소속 변경 (Device -> System Unit)
+            # 5. 실행 명령 (Atomic Transaction)
             device_management_command_provider.assign_to_unit(
                 db, device_id=device_id, unit_id=unit_id, role=role
             )
 
-            # B. 핀맵 실체화 (Cloning with Faulty Pin Awareness)
-            # 이 명령은 내부적으로 기기의 고장난 핀(FAULTY)을 보존하고 새 배선을 깝니다.
+            # B. 핀맵 복제 실행
             device_component_command_provider.reinitialize_components_by_recipe(
                 db, 
                 device_id=device_id, 
@@ -74,21 +99,21 @@ class SystemUnitBindingPolicy:
                 actor_user=actor_user
             )
 
-            # STEP 5: 감사 로그 및 확정
+            # 6. 결과 기록 및 확정
             audit_command_provider.log_event(
                 db=db,
                 actor_user=actor_user,
                 event_type="DEVICE_UNIT_BIND_SUCCESS",
                 description=f"Device {device_id} bound to Unit {unit_id} as {role}",
-                details={"unit_id": unit_id, "recipe_count": len(recipe)}
+                details={"unit_id": unit_id, "pin_count": len(recipe), "role": role}
             )
             
             db.commit()
-            return {"status": "success", "device_id": device_id, "unit_id": unit_id}
+            return {"status": "success", "device_id": device_id, "unit_id": unit_id, "role": role}
 
         except Exception as e:
             db.rollback()
-            logger.error(f"❌ Binding Failed: {str(e)}")
+            logger.error(f"❌ Policy Failure: {str(e)}")
             raise e
 
 system_unit_binding_policy = SystemUnitBindingPolicy()

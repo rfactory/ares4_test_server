@@ -75,5 +75,19 @@ class DeviceManagementQueryService:
         existing_device = self.get_by_serial(db, serial=serial)
         if existing_device:
             raise AppLogicError(f"Device with serial {serial} is already enrolled.")
-
+        
+    def get_count_by_unit(self, db: Session, *, unit_id: int) -> int:
+        """해당 유닛에 현재 연결된 기기 숫자를 카운트합니다."""
+        return db.query(DBDevice).filter(DBDevice.system_unit_id == unit_id).count()
+    
+    def has_master_device(self, db: Session, *, unit_id: int) -> bool:
+        """해당 유닛에 이미 MASTER(LEADER) 기기가 존재하는지 확인합니다."""
+        # Device 모델의 cluster_role 필드를 사용하여 확인합니다.
+        from app.models.objects.device import ClusterRoleEnum
+        master_exists = db.query(DBDevice).filter(
+            DBDevice.system_unit_id == unit_id,
+            DBDevice.cluster_role == ClusterRoleEnum.LEADER
+        ).first()
+        return master_exists is not None
+    
 device_management_query_service = DeviceManagementQueryService()

@@ -1,5 +1,4 @@
 from typing import Optional
-# --- [중요] 모델을 임포트하여 IDE가 인식하게 합니다 ---
 from app.models.objects.device import Device
 from app.models.objects.system_unit import SystemUnit
 from app.core.exceptions import ValidationError, PermissionDeniedError, NotFoundError
@@ -11,15 +10,17 @@ class SystemUnitBindingValidator:
     """
 
     def validate_binding_eligibility(
-        self, 
-        *, 
-        actor_user_id: int, 
-        device_obj: Device,
-        unit_obj: SystemUnit,
-        is_unit_owner: bool,  # <-- Policy가 미리 확인해서 알려주는 '결과값'
-        current_device_count: int,
-        max_capacity: int
-    ) -> bool:
+    self, 
+    *, 
+    actor_user_id: int, 
+    device_obj: Device,
+    unit_obj: SystemUnit,
+    is_unit_owner: bool,
+    current_device_count: int,
+    max_capacity: int,
+    requested_role: str,
+    has_existing_master: bool
+) -> bool:
         
         # 1. 존재 여부 확인
         if not device_obj:
@@ -42,6 +43,10 @@ class SystemUnitBindingValidator:
         # 4. 유닛 수용량 검증
         if current_device_count >= max_capacity:
             raise ValidationError(f"유닛 수용량({max_capacity}개)이 초과되었습니다.")
+
+        # 5. 마스터 역할 중복 검증
+        if requested_role == "MASTER" and has_existing_master:
+            raise ValidationError("이 유닛에는 이미 마스터 기기가 존재합니다.")
 
         return True
 
