@@ -24,33 +24,31 @@ class DeviceComponentInstanceCommandService:
     """
 
     def reinitialize_components_by_recipe(
-        self, 
-        db: Session, 
-        *, 
-        device_id: int, 
-        recipe: List[BlueprintPinMappingRead], 
-        actor_user: User
+        self, db: Session, *, device_id: int, recipe: List[BlueprintPinMappingRead], actor_user: User
     ) -> None:
-        """
-        [The Realizer]
-        전달받은 회로도 레시피를 바탕으로 기기의 기존 설정을 밀어버리고 새로 배선합니다.
-        """
-        # 1. 기존 데이터 삭제 (Clean-up) - 자기 도메인 영역만 삭제
-        db.query(DeviceComponentPinMapping).filter(DeviceComponentPinMapping.device_id == device_id).delete()
+        """[The Realizer] 기존 설정을 밀고(고장 제외) 새 배선을 실행합니다."""
+        
+        # 1. 기존 데이터 정리 (고장난 핀(FAULTY) 기록은 절대 지우지 않음)
+        db.query(DeviceComponentPinMapping).filter(
+            DeviceComponentPinMapping.device_id == device_id,
+            DeviceComponentPinMapping.status != PinStatusEnum.FAULTY # [중요] FAULTY 제외
+        ).delete()
+        
+        # 인스턴스는 배선이 새로 깔리므로 일단 모두 제거
         db.query(DeviceComponentInstance).filter(DeviceComponentInstance.device_id == device_id).delete()
         db.flush()
 
         # 2. 레시피(BlueprintPinMappingRead)를 바탕으로 실체화
         for item in recipe:
-            # A. 부품 인스턴스 생성
+            # 부품 인스턴스 생성
             new_instance = DeviceComponentInstance(
                 device_id=device_id,
                 supported_component_id=item.supported_component_id,
-                instance_name=item.pin_name, # 기본값으로 핀 이름을 인스턴스명으로 사용
-                configuration={} # 초기 설정값
+                instance_name=item.pin_name,
+                configuration={}
             )
             db.add(new_instance)
-            db.flush() # ID 확보
+            db.flush()
 
             # B. 핀 매핑 생성 (실제 배선)
             new_mapping = DeviceComponentPinMapping(
