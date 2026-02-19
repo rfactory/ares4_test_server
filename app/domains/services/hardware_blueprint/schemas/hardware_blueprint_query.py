@@ -59,3 +59,17 @@ class HardwareBlueprintQuery(BaseModel):
     
     skip: int = Field(0, ge=0, description="건너뛸 레코드 수")
     limit: int = Field(100, ge=1, le=1000, description="반환할 최대 레코드 수")
+    
+class BlueprintPinMappingRead(BaseModel):
+    """
+    [Response] 블루프린트의 개별 핀 배선 정보 스키마
+    """
+    id: int
+    supported_component_id: int
+    pin_name: str
+    pin_number: Optional[int]
+    pin_mode: Optional[str]
+    
+    # 만약 부품 규격 이름 등 추가 정보가 필요하다면 여기에 필드 추가
+    
+    model_config = ConfigDict(from_attributes=True)

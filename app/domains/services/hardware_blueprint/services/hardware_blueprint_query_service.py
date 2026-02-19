@@ -1,14 +1,27 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from app.models.relationships.blueprint_pin_mapping import BlueprintPinMapping
 from ..crud.hardware_blueprint_query_crud import hardware_blueprint_crud_query
-from ..schemas.hardware_blueprint_query import HardwareBlueprintQuery, HardwareBlueprintRead
+from ..schemas.hardware_blueprint_query import HardwareBlueprintQuery, HardwareBlueprintRead, BlueprintPinMappingRead
 
 class HardwareBlueprintQueryService:
     def get_blueprint_by_id(self, db: Session, *, id: int) -> Optional[HardwareBlueprintRead]:
         """ID로 하드웨어 블루프린트를 조회합니다."""
         db_obj = hardware_blueprint_crud_query.get(db, id=id)
         return HardwareBlueprintRead.model_validate(db_obj) if db_obj else None
+    
+    def get_blueprint_recipe(self, db: Session, *, blueprint_id: int) -> List[BlueprintPinMappingRead]:
+        """
+        [The Circuit Recipe Provider]
+        설계도에 정의된 물리적 핀 배선 정보를 '스키마 객체' 리스트로 변환하여 반환합니다.
+        """
+        db_objs = db.query(BlueprintPinMapping).filter(
+            BlueprintPinMapping.hardware_blueprint_id == blueprint_id
+        ).all()
+        
+        # 모델 리스트를 스키마 리스트로 변환하여 반환 (엄밀한 관계 유지)
+        return [BlueprintPinMappingRead.model_validate(obj) for obj in db_objs]
 
     def get_blueprint_by_version_and_name(
         self, db: Session, *, blueprint_version: str, blueprint_name: str
