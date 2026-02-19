@@ -6,7 +6,7 @@ from typing import Optional, Tuple, List
 from datetime import datetime, timezone
 
 # --- Model Imports ---
-from app.models.objects.device import Device as DBDevice
+from app.models.objects.device import Device as DBDevice, DeviceStatusEnum
 from app.models.objects.user import User
 from app.models.objects.hardware_blueprint import HardwareBlueprint
 from app.models.objects.system_unit import SystemUnit
@@ -209,5 +209,37 @@ class DeviceManagementCommandService:
         db.add(db_obj)
         db.flush()
         return db_obj
+    
+    def assign_to_unit(self, db: Session, *, device_id: int, unit_id: int) -> DBDevice:
+        """
+        [The Binder]
+        기기를 특정 시스템 유닛에 귀속시키고 상태를 PROVISIONED로 변경합니다.
+        """
+        device = db.query(DBDevice).filter(DBDevice.id == device_id).first()
+        if not device:
+            raise NotFoundError("Device", f"ID {device_id}를 찾을 수 없습니다.")
+
+        device.system_unit_id = unit_id
+        device.status = DeviceStatusEnum.PROVISIONED  # 결합 상태로 변경
+        
+        db.add(device)
+        db.flush()
+        return device
+    
+    def unbind_from_unit(self, db: Session, *, device_id: int) -> DBDevice:
+        """
+        [The Liberator]
+        기기를 유닛에서 해제하여 '무주공산' 상태로 돌려놓습니다.
+        """
+        device = db.query(DBDevice).filter(DBDevice.id == device_id).first()
+        if not device:
+            raise NotFoundError("Device", f"ID {device_id}를 찾을 수 없습니다.")
+
+        device.system_unit_id = None  # 소속 해제
+        device.status = DeviceStatusEnum.PENDING  # 다시 대기 상태로 변경
+        
+        db.add(device)
+        db.flush()
+        return device
     
 device_management_command_service = DeviceManagementCommandService()

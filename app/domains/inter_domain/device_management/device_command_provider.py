@@ -29,5 +29,17 @@ class DeviceManagementCommandProvider:
     def update_last_seen_at(self, db: Session, device_id: int):
         """[Inter-Domain] 기기 활동 시간 업데이트 인터페이스"""
         return device_management_command_service.update_last_seen(db, device_id=device_id)
+    
+    def assign_to_unit(self, db: Session, *, device_id: int, unit_id: int) -> DBDevice:
+        """기기를 유닛에 귀속시키는 도메인 간 인터페이스"""
+        return device_management_command_service.assign_to_unit(
+            db, device_id=device_id, unit_id=unit_id
+        )
+        
+    def unbind_device(self, db: Session, *, device_id: int) -> DBDevice:
+        """기기를 유닛에서 해제하는 도메인 간 인터페이스"""
+        return device_management_command_service.unbind_from_unit(
+            db, device_id=device_id
+        )
 
 device_management_command_provider = DeviceManagementCommandProvider()
