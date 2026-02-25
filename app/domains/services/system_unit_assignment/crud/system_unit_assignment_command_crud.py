@@ -30,17 +30,30 @@ class SystemUnitAssignmentCommandCRUD:
         db.flush() # ID 생성을 위해 flush
         return assignment
 
-    def delete_owner_assignment(self, db: Session, system_unit_id: int) -> int:
+    def terminate_owner_assignment(self, db: Session, system_unit_id: int) -> int:
         """
-        해당 유닛의 기존 소유자(OWNER)를 제거합니다.
-        (DB 트리거에 의해 하위 권한들도 자동 삭제될 수 있음)
+        [Scenario A] 해당 유닛의 활성 소유자(OWNER)의 관계를 종료합니다 (Soft Unbind).
+        물리적으로 삭제하지 않고 unassigned_at을 마킹하여 이력을 보존합니다.
         """
-        deleted_count = db.query(SystemUnitAssignment).filter(
+        from datetime import datetime
+        
+        # 1. 현재 활성화된(unassigned_at IS NULL) 소유자 레코드를 찾습니다.
+        owner_assignment = db.query(SystemUnitAssignment).filter(
             SystemUnitAssignment.system_unit_id == system_unit_id,
-            SystemUnitAssignment.role == AssignmentRoleEnum.OWNER
-        ).delete()
+            SystemUnitAssignment.role == AssignmentRoleEnum.OWNER,
+            SystemUnitAssignment.unassigned_at.is_(None)
+        ).first()
+
+        if not owner_assignment:
+            return 0
+
+        # 2. 삭제 대신 종료 시점을 기록합니다.
+        # 이 업데이트는 models/relationships/system_unit_assignment.py에 정의된 
+        # 'close_sub_assignments' 리스너를 트리거하여 운영자/조회자 권한도 연쇄 종료시킵니다.
+        owner_assignment.unassigned_at = datetime.now()
         db.flush()
-        return deleted_count
+        
+        return 1
     
     def update_unassigned_at(self, db: Session, *, assignment_id: int, unassigned_at: datetime):
         """DB 레코드의 unassigned_at 컬럼을 수정합니다 (Soft Unbind)."""
