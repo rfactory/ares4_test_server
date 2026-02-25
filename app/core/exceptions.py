@@ -54,3 +54,11 @@ class AuthenticationError(AresException):
     def __init__(self, message: str = "Authentication failed."):
         self.message = message
         super().__init__(self.message)
+
+class AccessDeniedError(AresException):
+    """권한이 거부되었을 때 발생하는 예외 (403 Forbidden)"""
+    def __init__(self, message: str = "접근 권한이 없습니다."):
+        self.message = message
+        self.status_code = 403
+        self.error_code = "ACCESS_DENIED"
+        super().__init__(self.message)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.models.relationships.system_unit_assignment import AssignmentRoleEnum
@@ -30,6 +31,12 @@ class SystemUnitAssignmentCommandService:
             role=AssignmentRoleEnum.OWNER,
             user_id=user_id,
             organization_id=organization_id
+        )
+    def terminate_assignment(self, db: Session, *, assignment_id: int, unassigned_at: datetime):
+        """특정 할당 레코드의 unassigned_at 컬럼을 업데이트합니다."""
+        # CRUD를 호출하여 실제 DB 값을 변경합니다.
+        return system_unit_assignment_command_crud.update_unassigned_at(
+            db=db, assignment_id=assignment_id, unassigned_at=unassigned_at
         )
 
 # 싱글톤 인스턴스

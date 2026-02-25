@@ -74,6 +74,8 @@ class TelemetryFilter(BaseModel):
     start_time: Optional[datetime] = Field(None, description="조회 시작 시간 (captured_at 기준)")
     end_time: Optional[datetime] = Field(None, description="조회 종료 시간 (captured_at 기준)")
     
+    request_user_id: Optional[int] = Field(None, description="데이터 조회를 요청하는 유저의 ID")
+    
     # 페이지네이션
     skip: int = Field(0, ge=0, description="건너뛸 레코드 수")
     limit: int = Field(100, ge=1, le=1000, description="반환할 최대 레코드 수 (최대 1000)")

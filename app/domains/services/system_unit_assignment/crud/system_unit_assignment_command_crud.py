@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.models.relationships.system_unit_assignment import SystemUnitAssignment, AssignmentRoleEnum
@@ -40,6 +41,17 @@ class SystemUnitAssignmentCommandCRUD:
         ).delete()
         db.flush()
         return deleted_count
+    
+    def update_unassigned_at(self, db: Session, *, assignment_id: int, unassigned_at: datetime):
+        """DB 레코드의 unassigned_at 컬럼을 수정합니다 (Soft Unbind)."""
+        db.query(SystemUnitAssignment).filter(
+            SystemUnitAssignment.id == assignment_id
+        ).update({"unassigned_at": unassigned_at})
+        
+        # update() 호출 후에는 별도의 commit 없이 flush 정도로 상태를 유지하거나 
+        # service/policy에서 최종 commit 하도록 둡니다.
+        db.flush() 
+        return True
 
 # 싱글톤 인스턴스
 system_unit_assignment_command_crud = SystemUnitAssignmentCommandCRUD()

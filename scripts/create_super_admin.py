@@ -42,6 +42,9 @@ ESSENTIAL_PERMISSIONS = {
     "permission:read": {"description": "Read permission definitions", "ui_group": "Access Control"},
     "access-request:read": {"description": "Read access requests", "ui_group": "Access Control"},
     
+    # Telemetry Data Access Control
+    "telemetry:read_all": {"description": "Access all telemetry history across all users", "ui_group": "Telemetry"},
+    
     # System
     "system:context_switch": {"description": "Allows switching to an organization context from the system context.", "ui_group": "System"},
 }

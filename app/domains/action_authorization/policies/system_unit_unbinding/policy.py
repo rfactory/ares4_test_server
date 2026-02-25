@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import Any, Dict
 
@@ -32,7 +32,7 @@ class SystemUnitUnbindingPolicy:
             # 2. 소유권 종료 실행 (unassigned_at 업데이트)
             # 이 명령이 실행되면 모델의 before_update 리스너가 작동하여 
             # 이 주인이 초대했던 다른 사람들(Operator, Viewer)도 자동으로 종료됩니다.
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             system_unit_assignment_command_provider.terminate_assignment(
                 db, assignment_id=assignment.id, unassigned_at=now
             )
