@@ -18,6 +18,8 @@ class SystemUnitAssignmentQueryProvider:
     
     def get_assignment_period(self, db: Session, *, unit_id: int, user_id: int) -> Optional[SystemUnitAssignment]:
         """[도메인 협력용] 특정 유저의 소유 기간 정보를 제공합니다."""
-        return system_unit_assignment_query_service.get_assignment_period(db, unit_id=unit_id, user_id=user_id)
+        return system_unit_assignment_query_service.get_assignment_period(
+            db, unit_id=unit_id, user_id=user_id
+        )
     
 system_unit_assignment_query_provider = SystemUnitAssignmentQueryProvider()

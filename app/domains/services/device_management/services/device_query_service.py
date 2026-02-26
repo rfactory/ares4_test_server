@@ -10,6 +10,12 @@ from ..crud.device_query_crud import device_query_crud
 from ..schemas.device_query import DeviceQuery, DeviceRead
 
 class DeviceManagementQueryService:
+    def __init__(self):
+        # [수정] 전역으로 존재하는 crud를 인스턴스 속성으로 등록해야 
+        # 정책(Policy)에서 .device_query_crud 로 접근이 가능합니다.
+        from ..crud.device_query_crud import device_query_crud
+        self.device_query_crud = device_query_crud
+        
     def get_devices(self, db: Session, *, query_params: DeviceQuery) -> List[DeviceRead]:
         """DeviceQuery 스키마를 사용하여 장치 목록을 동적으로 조회합니다."""
         db_devices = device_query_crud.get_multi(db, query_params=query_params)
@@ -89,5 +95,4 @@ class DeviceManagementQueryService:
             DBDevice.cluster_role == ClusterRoleEnum.LEADER
         ).first()
         return master_exists is not None
-    
 device_management_query_service = DeviceManagementQueryService()

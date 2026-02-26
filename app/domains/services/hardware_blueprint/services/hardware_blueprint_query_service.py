@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.models.relationships.blueprint_pin_mapping import BlueprintPinMapping
+from app.models.relationships.blueprint_valid_pin import BlueprintValidPin
 from ..crud.hardware_blueprint_query_crud import hardware_blueprint_crud_query
 from ..schemas.hardware_blueprint_query import HardwareBlueprintQuery, HardwareBlueprintRead, BlueprintPinMappingRead
 
@@ -48,5 +49,18 @@ class HardwareBlueprintQueryService:
         특정 블루프린트에 대해 특정 부품이 유효한지 확인합니다.
         """
         return hardware_blueprint_crud_query.is_component_valid_for_blueprint(db, blueprint_id=blueprint_id, supported_component_id=supported_component_id)
-
+    
+    def get_valid_pin_pool(self, db: Session, *, blueprint_id: int, pin_type: str = 'GPIO') -> List[int]:
+        """
+        [Scenario C 핵심] 특정 설계도(Blueprint)에서 물리적으로 사용 가능한 핀 번호 목록을 조회합니다.
+        'GPIO' 타입을 기본으로 조회하여 우회 배선이 가능한 후보군을 확보합니다.
+        """
+        # BlueprintValidPin 모델 정의에 따라 hardware_blueprint_id 컬럼을 조회합니다.
+        pins = db.query(BlueprintValidPin).filter(
+            BlueprintValidPin.hardware_blueprint_id == blueprint_id,
+            BlueprintValidPin.pin_type == pin_type
+        ).all()
+        
+        # 물리 핀 번호(pin_number) 리스트만 반환합니다.
+        return [p.pin_number for p in pins]
 hardware_blueprint_query_service = HardwareBlueprintQueryService()

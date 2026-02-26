@@ -40,5 +40,10 @@ class HardwareBlueprintQueryProvider:
     def is_component_valid_for_blueprint(self, db: Session, *, blueprint_id: int, supported_component_id: int) -> bool:
         """특정 블루프린트에 대해 특정 부품이 유효한지 확인합니다."""
         return hardware_blueprint_query_service.is_component_valid_for_blueprint(db, blueprint_id=blueprint_id, supported_component_id=supported_component_id)
-
+    
+    def get_valid_pin_pool(self, db: Session, *, blueprint_id: int, pin_type: str = 'GPIO') -> List[int]:
+        """[Inter-Domain] 설계도의 가용 핀 풀 정보를 정책 계층에 재수출합니다."""
+        return hardware_blueprint_query_service.get_valid_pin_pool(
+            db, blueprint_id=blueprint_id, pin_type=pin_type
+        )
 hardware_blueprint_query_provider = HardwareBlueprintQueryProvider()

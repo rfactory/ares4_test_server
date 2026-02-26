@@ -10,5 +10,9 @@ class SystemUnitQueryProvider:
     """
     def get_by_id(self, db: Session, *, unit_id: int) -> Optional[SystemUnitRead]:
         return system_unit_query_service.get_system_unit(db, id=unit_id)
+    
+    def get_service(self):
+        """정책 계층에서 모델 원본 조회를 위해 서비스를 내보냅니다."""
+        return system_unit_query_service
 
 system_unit_query_provider = SystemUnitQueryProvider()

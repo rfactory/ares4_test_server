@@ -11,8 +11,8 @@ class CRUDDeviceQuery:
     def _get_base_query(self, db: Session):
         """관계 데이터를 미리 로드하는 공통 기본 쿼리입니다."""
         return db.query(Device).options(
-            joinedload(Device.organization_devices),
-            joinedload(Device.users)
+            joinedload(Device.owner_organization), 
+            joinedload(Device.owner_user)
         ).filter(Device.is_active == True)
 
     def get(self, db: Session, *, id: int) -> Optional[Device]:
