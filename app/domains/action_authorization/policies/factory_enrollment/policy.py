@@ -2,7 +2,7 @@ import logging
 from sqlalchemy.orm import Session
 from typing import Any, Dict
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, PermissionDeniedError
 
 # 도메인 서비스 및 검증기 프로바이더
 # 1. 검증기
@@ -17,9 +17,16 @@ from app.domains.inter_domain.hardware_blueprint.hardware_blueprint_command_prov
 from app.domains.inter_domain.provisioning_token.provisioning_token_query_provider import provisioning_token_query_provider
 from app.domains.inter_domain.provisioning_token.provisioning_token_command_provider import provisioning_token_command_provider
 from app.domains.inter_domain.system_unit_assignment.system_unit_assignment_command_provider import system_unit_assignment_command_provider
+from app.domains.inter_domain.system_unit_assignment.system_unit_assignment_query_provider import system_unit_assignment_query_provider
 
 # 4. 감사 로그
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
+
+# 5. 인증서 관리 (Vault PKI 연동)
+from app.domains.inter_domain.certificate_management.certificate_command_provider import certificate_command_provider
+
+# 6. 모델
+from app.models.objects.device import Device as DBDevice
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +45,20 @@ class FactoryEnrollmentPolicy:
             query_svc.ensure_device_is_enrollee(db, serial=cpu_serial)
 
             cmd_svc = device_management_command_provider.get_service()
+            # [Step 4] 기기 정체성 생성 (UUID, HMAC 등)
             identity_package = await cmd_svc.execute_factory_enrollment_transaction(
                 db=db, cpu_serial=cpu_serial, client_ip=client_ip, **kwargs
             )
 
+            # [보완] Policy 수준에서 감사 로그의 상세도 강화
             audit_command_provider.log_event(
                 db=db,
                 event_type="FACTORY_ENROLLMENT_SUCCESS",
-                description=f"Identity granted: {cpu_serial}",
-                details={"device_id": identity_package["device_id"]}
+                description=f"Identity and mTLS Credentials granted: {cpu_serial}",
+                details={
+                    "device_id": identity_package["device_id"],
+                    "certificate_issued": True # Service에서 이미 발급됨
+                }
             )
 
             db.commit() 
@@ -110,8 +122,16 @@ class FactoryEnrollmentPolicy:
             # 실패 기록 감사 로그 (선택 사항)
             logger.error(f"❌ [Policy] Unit claim failed: {str(e)}")
             raise e
-        
     
+    def verify_device_identity_or_raise(self, db: Session, *, cpu_serial: str, device_uuid: str) -> DBDevice:
+        """
+        [Handshake Judge] 반환 타입을 DBDevice로 명시하여 IDE의 '흰색 에러'를 해결합니다.
+        """
+        device = device_management_query_provider.get_service().device_query_crud.get_by_serial(db, serial=cpu_serial)
+        if not device or device.current_uuid != device_uuid:
+            raise PermissionDeniedError("인증되지 않은 하드웨어 정보입니다.")
+        return device
+        
     def _audit_failure(self, db: Session, serial: str, ip: str, error: Exception):
         """실패 기록을 별도 트랜잭션으로 처리하는 감사 로직"""
         try:

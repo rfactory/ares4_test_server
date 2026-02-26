@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from app.dependencies import get_db, get_current_user
-from app.core.exceptions import AuthenticationError, AppLogicError, ValidationError, NotFoundError
+from app.core.exceptions import AuthenticationError, AppLogicError, ValidationError, NotFoundError, PermissionDeniedError
 from app.domains.inter_domain.policies.factory_enrollment.factory_enrollment_policy_provider import factory_enrollment_policy_provider
-from app.models.objects.user import User
+from app.domains.inter_domain.policies.system_unit.system_unit_policy_provider import system_unit_policy_provider
+from app.domains.inter_domain.system_unit_assignment.system_unit_assignment_query_provider import system_unit_assignment_query_provider
 
-# [확인 필요] 사용자 인증용 함수가 어디에 있나요? 
-# 보통 app.dependencies에 같이 있거나 auth 쪽에 있을 겁니다. 일단 임시로 적어둡니다.
-# from app.dependencies import get_current_active_user
+# [타입 힌팅용 임포트]
+from app.models.objects.user import User
+from app.models.objects.device import Device as DBDevice
+from app.models.relationships.system_unit_assignment import SystemUnitAssignment
 
 router = APIRouter()
 
@@ -41,20 +43,18 @@ async def factory_auto_enroll(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error: {e}")
     
 # ---------------------------------------------------------
-# 2. 사용자 기기 점유
+# 2. 사용자 기기 점유 (QR 스캔)
 # ---------------------------------------------------------
 @router.post("/claim", status_code=status.HTTP_200_OK)
 def claim_device(
     *,
     db: Session = Depends(get_db),
-    # 이 Depends가 작동하면서 로그인하지 않은 유저는 자동으로 401 에러를 내뱉고 차단합니다.
     current_user: User = Depends(get_current_user), 
     token: str = Body(..., embed=True)
 ) -> Any:
     policy = factory_enrollment_policy_provider.get_policy()
 
     try:
-        # 인증된 유저의 ID(current_user.id)를 정책에 넘겨줍니다.
         result = policy.claim_unit(
             db=db,
             token_value=token,
@@ -65,3 +65,50 @@ def claim_device(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Claim failed.")
+
+# ---------------------------------------------------------
+# 3. 기기 최종 핸드셰이크 (WiFi 연결 후 등록)
+# ---------------------------------------------------------
+@router.post("/handshake", status_code=status.HTTP_200_OK)
+def device_handshake(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    cpu_serial: str = Body(...),
+    device_uuid: str = Body(...)
+) -> Any:
+    # 1. 각 도메인 정책 지휘관 확보
+    enroll_policy = factory_enrollment_policy_provider.get_policy()
+    bind_policy = system_unit_policy_provider.get_policy()
+
+    try:
+        # 2. 기기 정체성 확인 (Enrollment Policy)
+        # 여기서 반환 타입을 DBDevice로 명시했으므로 device_obj.id에 색상이 나옵니다.
+        device_obj: DBDevice = enroll_policy.verify_device_identity_or_raise(
+            db, cpu_serial=cpu_serial, device_uuid=device_uuid
+        )
+
+        # 3. 사용자가 점유 중인 유닛 확인 (Assignment Domain)
+        # 반환 타입을 SystemUnitAssignment로 명시하여 .system_unit_id 에 색상을 입힙니다.
+        assignment: SystemUnitAssignment = system_unit_assignment_query_provider.get_active_owner_assignment(
+            db, user_id=current_user.id
+        )
+        if not assignment:
+            raise AppLogicError("할당된 유닛이 없습니다. 먼저 가구의 QR 코드를 스캔하세요.")
+
+        # 4. 정책 간 조율 (The Grand Orchestration)
+        # 이제 bind_policy.을 치면 bind_device_to_unit 이 자동완성 됩니다.
+        result = bind_policy.bind_device_to_unit(
+            db, 
+            actor_user=current_user, 
+            unit_id=assignment.system_unit_id, 
+            device_id=device_obj.id,
+            role="MASTER"
+        )
+        
+        return result
+
+    except (PermissionDeniedError, AppLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Handshake failed: {e}")

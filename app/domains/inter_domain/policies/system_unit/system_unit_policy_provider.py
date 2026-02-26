@@ -3,7 +3,7 @@ from typing import Any, Dict
 from app.models.objects.user import User
 
 # 실제 비즈니스 로직(Policy) 임포트
-from app.domains.action_authorization.policies.system_unit_binding.system_unit_binding_policy import system_unit_binding_policy
+from app.domains.action_authorization.policies.system_unit_binding.system_unit_binding_policy import system_unit_binding_policy, SystemUnitBindingPolicy
 from app.domains.action_authorization.policies.system_unit_unbinding.policy import system_unit_unbinding_policy
 
 class SystemUnitPolicyProvider:
@@ -11,6 +11,9 @@ class SystemUnitPolicyProvider:
     [Inter-Domain Provider] 
     시스템 유닛 관련 정책들을 외부(API 등)에 제공하는 통합 창구입니다.
     """
+    
+    def get_policy(self) -> SystemUnitBindingPolicy:
+        return system_unit_binding_policy
 
     def bind_device(
         self, db: Session, *, actor_user: User, unit_id: int, device_id: int, role: str
