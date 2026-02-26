@@ -19,5 +19,11 @@ class SystemUnitCommandProvider:
         return system_unit_command_service.update_unit_status(
             db, unit_id=unit_id, status=status, actor_user=actor_user
         )
+    
+    def sync_activation_status(self, db: Session, *, unit_id: int, actor_user: User) -> None:
+        """[Smart Command] 정원 충족 여부에 따른 상태 자동 동기화 명령을 하달합니다."""
+        return system_unit_command_service.sync_activation_status(
+            db=db, unit_id=unit_id, actor_user=actor_user
+        )
 
 system_unit_command_provider = SystemUnitCommandProvider()

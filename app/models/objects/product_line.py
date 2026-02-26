@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, String, Text, Boolean, UniqueConstraint
+from sqlalchemy import BigInteger, String, Text, Boolean, UniqueConstraint, Integer
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, List, TYPE_CHECKING
 
@@ -35,6 +35,15 @@ class ProductLine(Base, TimestampMixin):
     
     # 해당 제품 라인이 요금제별 기기 수 제한을 받는지 여부
     enforce_device_limit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False) 
+
+    # 이 모델(가구)이 완성되기 위해 반드시 필요한 라즈베리파이(블록)의 수
+    # 정확히 이 개수가 결합되어야만 유닛의 상태가 ACTIVE로 전환됩니다.
+    required_block_count: Mapped[int] = mapped_column(
+        Integer, 
+        default=1, 
+        nullable=False, 
+        comment="가구 가동을 위한 필수 블록 개수 (정확히 이 개수여야 ACTIVE)"
+    )
     
     # --- Relationships (Mapped 스타일 적용 완료) ---
 

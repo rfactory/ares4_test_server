@@ -6,7 +6,7 @@ from typing import Optional, Tuple, List
 from datetime import datetime, timezone
 
 # --- Model Imports ---
-from app.models.objects.device import Device as DBDevice, DeviceStatusEnum
+from app.models.objects.device import Device as DBDevice, DeviceStatusEnum, ClusterRoleEnum # ClusterRoleEnum 추가
 from app.models.objects.user import User
 from app.models.objects.hardware_blueprint import HardwareBlueprint
 from app.models.objects.system_unit import SystemUnit
@@ -247,5 +247,28 @@ class DeviceManagementCommandService:
         db.add(device)
         db.flush()
         return device
+    
+    def rotate_master(self, db: Session, *, unit_id: int, new_master_id: int) -> None:
+        """[The Realizer] DB 상의 마스터 역할을 원자적으로 교체합니다."""
+        # 1. 기존 마스터 강등 (Leader -> Follower)
+        old_master = db.query(DBDevice).filter(
+            DBDevice.system_unit_id == unit_id, 
+            DBDevice.cluster_role == ClusterRoleEnum.LEADER
+        ).first()
+        
+        if old_master:
+            old_master.cluster_role = ClusterRoleEnum.FOLLOWER
+
+        # 2. 새 마스터 임명 (Follower -> Leader)
+        target_device = db.query(DBDevice).filter(DBDevice.id == new_master_id).first()
+        if target_device:
+            target_device.cluster_role = ClusterRoleEnum.LEADER
+            
+        # 3. 유닛 정보 업데이트 (현재 유닛이 누구를 대장으로 보는지)
+        unit = db.query(SystemUnit).filter(SystemUnit.id == unit_id).first()
+        if unit:
+            unit.master_device_id = new_master_id
+        
+        db.flush()
     
 device_management_command_service = DeviceManagementCommandService()

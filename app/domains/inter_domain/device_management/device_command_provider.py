@@ -40,5 +40,11 @@ class DeviceManagementCommandProvider:
         return device_management_command_service.unbind_from_unit(
             db, device_id=device_id
         )
+    
+    def rotate_master(self, db: Session, *, unit_id: int, new_master_id: int) -> None:
+        """[Inter-Domain] 마스터 권한 순환 명령 인터페이스"""
+        return device_management_command_service.rotate_master(
+            db, unit_id=unit_id, new_master_id=new_master_id
+        )
 
 device_management_command_provider = DeviceManagementCommandProvider()
