@@ -40,7 +40,7 @@ class SystemUnitUnbindingPolicy:
             # 3. 유닛 상태 변경
             # 기기는 그대로 꽂혀있으므로 ACTIVE에서 PENDING_OWNER(새 주인 대기) 상태로 바꿉니다.
             system_unit_command_provider.update_unit_status(
-                db, unit_id=unit_id, status="PENDING_OWNER", actor_user=actor_user
+                db, unit_id=unit_id, status="PROVISIONING", actor_user=actor_user
             )
 
             # 4. 결과 기록 (Audit Log)

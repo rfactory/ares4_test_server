@@ -1,6 +1,6 @@
 import logging
 from sqlalchemy.orm import Session
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List
 from app.core.exceptions import NotFoundError
 
 # --- [1] Inter-Domain Providers (조회 및 실행 인터페이스) ---
@@ -20,11 +20,18 @@ from app.domains.inter_domain.system_unit.system_unit_command_provider import sy
 
 # 5. 공통 기능
 from app.domains.inter_domain.system_unit_assignment.system_unit_assignment_query_provider import system_unit_assignment_query_provider
+from app.domains.inter_domain.system_unit_assignment.system_unit_assignment_command_provider import system_unit_assignment_command_provider
 from app.domains.inter_domain.audit.audit_command_provider import audit_command_provider
 from app.models.objects.user import User
+from app.models.objects.device import Device as DBDevice
+from app.models.relationships.device_component_pin_mapping import DeviceComponentPinMapping, PinStatusEnum
 
 # 6. 검증 로직 (Validator) - 정책에서 직접 호출하여 판단을 위임
 from app.domains.action_authorization.validators.system_unit_binding.validator import system_unit_binding_validator
+
+from app.domains.services.device_management.schemas.device_query import DeviceQuery
+from app.domains.services.device_management.schemas.device_command import DeviceUpdate
+from app.models.relationships.system_unit_assignment import AssignmentRoleEnum
 
 logger = logging.getLogger(__name__)
 
@@ -108,4 +115,78 @@ class SystemUnitBindingPolicy:
             logger.error(f"❌ Policy Failure: {str(e)}")
             raise e
 
+    def claim_unit_and_inherit_devices(self, db: Session, *, actor_user: User, unit_id: int) -> Dict[str, Any]:
+        """
+        [Scenario C - Step 5: Atomic Fusion] 
+        새 주인이 QR을 찍었을 때 유닛 소유권 등록 및 소속 기기 일괄 승계를 처리합니다.
+        """
+        try:
+            # A. 유닛 소유권 등록 (시스템 유닛 어사인먼트 생성)
+            system_unit_assignment_command_provider.create_assignment(
+                db, system_unit_id=unit_id, user_id=actor_user.id, role="OWNER"
+            )
+
+            # B. 소속 기기 일괄 승계 (실제 존재하는 get_devices 필터 사용)
+            query_params = DeviceQuery(system_unit_id=unit_id)
+            attached_devices_read = device_management_query_provider.get_devices(db, query_params=query_params)
+            
+            for d_read in attached_devices_read:
+                # 1. 기기 소유권 업데이트 (실존하는 update_device와 DeviceUpdate 스키마 사용)
+                update_data = DeviceUpdate(owner_user_id=actor_user.id)
+                device_management_command_provider.update_device(
+                    db, device_id=d_read.id, obj_in=update_data, actor_user=actor_user
+                )
+                
+                # 2. 고장 핀 발견 시 자동 우회 (우회를 위해 DB 모델 객체 획득)
+                db_device = db.query(DBDevice).filter(DBDevice.id == d_read.id).first()
+                if db_device:
+                    self.check_and_reroute_faulty_pins(db, device=db_device)
+
+            # C. 유닛 상태 활성화
+            system_unit_command_provider.update_unit_status(db, unit_id=unit_id, status="ACTIVE", actor_user=actor_user)
+
+            db.commit()
+            return {"status": "success", "unit_id": unit_id, "inherited_count": len(attached_devices_read)}
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ Claim Policy Failure: {str(e)}")
+            raise e
+
+    def check_and_reroute_faulty_pins(self, db: Session, *, device: DBDevice):
+        """
+        [The Rerouter] 기기의 고장 핀을 감지하여 다른 핀으로 우회 배선합니다.
+        """
+        # DB 모델을 직접 받으므로 device.pin_mappings 접근 가능 (흰색 에러 해결)
+        current_mappings: List[DeviceComponentPinMapping] = device.pin_mappings
+        faulty_mappings = [m for m in current_mappings if m.status == "FAULTY"]
+
+        if not faulty_mappings:
+            return
+
+        logger.info(f"⚡ 기기 {device.id}에서 고장 핀 발견. 우회 배선 엔진 가동.")
+
+        # 설계도 정보 획득 (가용 핀 목록을 위해 레시피 조회)
+        recipe = hardware_blueprint_query_provider.get_blueprint_recipe(db, blueprint_id=device.hardware_blueprint_id)
+        
+        # [핵심] 해당 설계도에서 허용하는 전체 물리 핀 목록 (가정: recipe에 모든 정보가 있음)
+        valid_pins = {r.pin_number for r in recipe}
+        used_pins = {m.pin_number for m in current_mappings}
+        
+        # 고장 나지 않았고 사용 중이지 않은 핀들만 후보군으로 추출
+        available_candidates = [p for p in valid_pins if p not in used_pins]
+
+        for mapping in faulty_mappings:
+            if not available_candidates:
+                logger.error(f"❌ 기기 {device.id}에 여유 핀이 없어 우회가 불가능합니다.")
+                break
+            
+            new_pin = available_candidates.pop(0)
+            old_pin = mapping.pin_number
+            
+            # 실질적인 우회 배선 (Rerouting)
+            mapping.pin_number = new_pin
+            logger.info(f"✅ 우회 성공: {old_pin}번(고장) -> {new_pin}번(대체)")
+
+        db.flush()
 system_unit_binding_policy = SystemUnitBindingPolicy()
